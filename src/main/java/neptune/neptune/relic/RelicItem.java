@@ -72,7 +72,7 @@ public class RelicItem extends Item {
         if (data == null || data.isEmpty()) return null;
         CompoundTag tag = data.copyTag();
         if (tag.contains("relicId")) {
-            return tag.getString("relicId");
+            return tag.getStringOr("relicId", null);
         }
         return null;
     }

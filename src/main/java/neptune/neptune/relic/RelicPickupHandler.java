@@ -29,7 +29,7 @@ public class RelicPickupHandler {
         var customData = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
         if (customData != null) {
             var tag = customData.copyTag();
-            if (tag.getBoolean("registered")) return;
+            if (tag.getBooleanOr("registered", false)) return;
         }
 
         // Mark as registered on this stack
