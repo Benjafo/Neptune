@@ -6,10 +6,13 @@ import neptune.neptune.data.VoidEssenceData;
 import neptune.neptune.map.EndMapData;
 import neptune.neptune.map.MapCollectionData;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+
+import neptune.neptune.Neptune;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +25,15 @@ public class NeptuneNetworking {
 
         // Register S2C packets
         PayloadTypeRegistry.playS2C().register(MapSyncPayload.TYPE, MapSyncPayload.STREAM_CODEC);
+
+        // Sync map data when player joins
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+            ServerPlayer player = handler.player;
+            MapCollectionData maps = player.getAttachedOrCreate(NeptuneAttachments.MAPS);
+            if (maps.getLoadedMap() != null) {
+                syncMapToClient(player);
+            }
+        });
 
         // Handle broker purchase
         ServerPlayNetworking.registerGlobalReceiver(BrokerPurchasePayload.TYPE, (payload, context) -> {
@@ -83,9 +95,12 @@ public class NeptuneNetworking {
         EndMapData loadedMap = maps.getLoadedMap();
 
         if (loadedMap == null) {
-            // Send empty payload to clear client map
+            Neptune.LOGGER.info("[Neptune] Syncing empty map to client for {}", player.getName().getString());
             ServerPlayNetworking.send(player, new MapSyncPayload("", 0, List.of()));
         } else {
+            Neptune.LOGGER.info("[Neptune] Syncing map '{}' (grid={}, marks={}) to client for {}",
+                    loadedMap.name(), loadedMap.gridSize(), loadedMap.markedGrids().size(),
+                    player.getName().getString());
             ServerPlayNetworking.send(player, new MapSyncPayload(
                     loadedMap.name(),
                     loadedMap.gridSize(),

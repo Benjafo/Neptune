@@ -21,11 +21,14 @@ public class EndMapScreen extends Screen {
 
     // Colors
     private static final int BG_COLOR = 0xFF0A0A14;
+    private static final int CELL_LIGHT = 0xFF141428;
+    private static final int CELL_DARK = 0xFF0E0E1E;
     private static final int GRID_LINE_COLOR = 0x30FFFFFF;
     private static final int MARKED_COLOR = 0xBB00DD00;
     private static final int PLAYER_COLOR = 0xFFFF5555;
     private static final int PLAYER_CELL_COLOR = 0x40FF5555;
     private static final int BORDER_COLOR = 0xFF555555;
+    private static final int AXIS_COLOR = 0x80FFFF55;
 
     private int cellSize = CELL_SIZE_BASE;
     private double scrollX = 0;
@@ -79,6 +82,10 @@ public class EndMapScreen extends Screen {
                 int screenCellX = centerScreenX + (int) ((gx - scrollX) * cellSize);
                 int screenCellY = centerScreenY + (int) ((gz - scrollZ) * cellSize);
 
+                // Checkerboard pattern
+                int checkerColor = ((gx + gz) & 1) == 0 ? CELL_LIGHT : CELL_DARK;
+                graphics.fill(screenCellX, screenCellY, screenCellX + cellSize, screenCellY + cellSize, checkerColor);
+
                 // Marked cells
                 if (ClientMapState.isMarked(gx, gz)) {
                     graphics.fill(screenCellX + 1, screenCellY + 1,
@@ -88,6 +95,15 @@ public class EndMapScreen extends Screen {
                 // Grid lines
                 graphics.fill(screenCellX, screenCellY, screenCellX + cellSize, screenCellY + 1, GRID_LINE_COLOR);
                 graphics.fill(screenCellX, screenCellY, screenCellX + 1, screenCellY + cellSize, GRID_LINE_COLOR);
+
+                // Axis cross at origin — vertical line between grid X=-1 and X=0
+                if (gx == 0) {
+                    graphics.fill(screenCellX, screenCellY, screenCellX + 1, screenCellY + cellSize, AXIS_COLOR);
+                }
+                // Horizontal line between grid Z=-1 and Z=0
+                if (gz == 0) {
+                    graphics.fill(screenCellX, screenCellY, screenCellX + cellSize, screenCellY + 1, AXIS_COLOR);
+                }
             }
         }
 
@@ -116,7 +132,7 @@ public class EndMapScreen extends Screen {
         graphics.fill(0, 20, this.width, 21, BORDER_COLOR);
         graphics.drawString(this.font, "End Map: " + ClientMapState.getMapName(), 5, 6, 0xFFAA00, true);
 
-        String stats = ClientMapState.getMarkedGrids().size() + " cities marked | Grid: " + ClientMapState.getGridSize() + "b | Scroll to zoom";
+        String stats = ClientMapState.getMarkedCount() + " cities marked | Grid: " + ClientMapState.getGridSize() + "b | Scroll to zoom";
         int statsWidth = this.font.width(stats);
         graphics.drawString(this.font, stats, this.width - statsWidth - 5, 6, 0x888888, true);
 
