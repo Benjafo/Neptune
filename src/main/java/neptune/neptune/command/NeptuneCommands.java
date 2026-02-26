@@ -10,6 +10,7 @@ import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.data.VoidEssenceData;
 import neptune.neptune.entity.BrokerEntity;
 import neptune.neptune.entity.NeptuneEntities;
+import neptune.neptune.map.EndMapCommands;
 import neptune.neptune.unlock.UnlockData;
 import neptune.neptune.unlock.UnlockManager;
 import neptune.neptune.unlock.UnlockType;
@@ -42,6 +43,9 @@ public class NeptuneCommands {
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+
+            // Map commands
+            EndMapCommands.register(dispatcher);
 
             // Broker commands
             dispatcher.register(Commands.literal("broker")

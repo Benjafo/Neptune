@@ -1,6 +1,7 @@
 package neptune.neptune.data;
 
 import neptune.neptune.challenge.ChallengeData;
+import neptune.neptune.map.MapCollectionData;
 import neptune.neptune.unlock.UnlockData;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
@@ -34,6 +35,14 @@ public class NeptuneAttachments {
                     .persistent(ChallengeData.CODEC)
                     .copyOnDeath()
                     .syncWith(ChallengeData.STREAM_CODEC, AttachmentSyncPredicate.targetOnly())
+    );
+
+    public static final AttachmentType<MapCollectionData> MAPS = AttachmentRegistry.create(
+            Identifier.fromNamespaceAndPath("neptune", "maps"),
+            builder -> builder
+                    .initializer(() -> MapCollectionData.EMPTY)
+                    .persistent(MapCollectionData.CODEC)
+                    .copyOnDeath()
     );
 
     public static void register() {

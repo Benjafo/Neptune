@@ -3,12 +3,15 @@ package neptune.neptune.network;
 import neptune.neptune.broker.BrokerStock;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.data.VoidEssenceData;
+import neptune.neptune.map.EndMapData;
+import neptune.neptune.map.MapCollectionData;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class NeptuneNetworking {
@@ -16,6 +19,9 @@ public class NeptuneNetworking {
     public static void register() {
         // Register C2S packets
         PayloadTypeRegistry.playC2S().register(BrokerPurchasePayload.TYPE, BrokerPurchasePayload.STREAM_CODEC);
+
+        // Register S2C packets
+        PayloadTypeRegistry.playS2C().register(MapSyncPayload.TYPE, MapSyncPayload.STREAM_CODEC);
 
         // Handle broker purchase
         ServerPlayNetworking.registerGlobalReceiver(BrokerPurchasePayload.TYPE, (payload, context) -> {
@@ -27,7 +33,6 @@ public class NeptuneNetworking {
 
             BrokerStock.StockEntry entry = stock.get(index);
 
-            // Check if player has enough essence
             VoidEssenceData data = player.getAttachedOrCreate(NeptuneAttachments.VOID_ESSENCE);
             VoidEssenceData afterSpend = data.spend(entry.cost());
             if (afterSpend == null) {
@@ -35,7 +40,6 @@ public class NeptuneNetworking {
                 return;
             }
 
-            // Handle special items
             switch (entry.name()) {
                 case "Basic Repair Kit" -> {
                     ItemStack held = player.getMainHandItem();
@@ -43,9 +47,7 @@ public class NeptuneNetworking {
                         player.sendSystemMessage(Component.literal("§cHold a damageable item in your main hand!"));
                         return;
                     }
-                    // Deduct essence
                     player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
-                    // Restore 50% durability
                     int maxDamage = held.getMaxDamage();
                     int currentDamage = held.getDamageValue();
                     int repair = maxDamage / 2;
@@ -54,19 +56,15 @@ public class NeptuneNetworking {
                     return;
                 }
                 case "Recall Pearl" -> {
-                    // Deduct essence
                     player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
-                    // Teleport to 0, ~, 0 (main End island)
                     player.teleportTo(0.5, 64, 0.5);
                     player.sendSystemMessage(Component.literal("§aTeleported to main End island!"));
                     return;
                 }
                 default -> {
-                    // Give item stack
                     if (!entry.itemStack().isEmpty()) {
                         ItemStack toGive = entry.itemStack().copy();
                         if (!player.getInventory().add(toGive)) {
-                            // Drop on ground if inventory is full
                             player.drop(toGive, false);
                         }
                         player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
@@ -75,5 +73,24 @@ public class NeptuneNetworking {
                 }
             }
         });
+    }
+
+    /**
+     * Sync the player's loaded map data to the client for rendering.
+     */
+    public static void syncMapToClient(ServerPlayer player) {
+        MapCollectionData maps = player.getAttachedOrCreate(NeptuneAttachments.MAPS);
+        EndMapData loadedMap = maps.getLoadedMap();
+
+        if (loadedMap == null) {
+            // Send empty payload to clear client map
+            ServerPlayNetworking.send(player, new MapSyncPayload("", 0, List.of()));
+        } else {
+            ServerPlayNetworking.send(player, new MapSyncPayload(
+                    loadedMap.name(),
+                    loadedMap.gridSize(),
+                    new ArrayList<>(loadedMap.markedGrids())
+            ));
+        }
     }
 }
