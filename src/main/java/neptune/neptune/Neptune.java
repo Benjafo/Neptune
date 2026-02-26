@@ -6,6 +6,7 @@ import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.entity.NeptuneEntities;
 import neptune.neptune.network.NeptuneNetworking;
 import neptune.neptune.relic.NeptuneItems;
+import neptune.neptune.relic.RelicLootHandler;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ public class Neptune implements ModInitializer {
         NeptuneMenus.register();
         NeptuneNetworking.register();
         NeptuneCommands.register();
+        RelicLootHandler.register();
 
         LOGGER.info("Neptune mod initialized.");
     }
