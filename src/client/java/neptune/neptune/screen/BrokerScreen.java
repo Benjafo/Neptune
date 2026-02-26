@@ -6,6 +6,10 @@ import neptune.neptune.broker.GearValueCalculator;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.data.VoidEssenceData;
 import neptune.neptune.network.BrokerPurchasePayload;
+import neptune.neptune.relic.RelicJournalData;
+import neptune.neptune.relic.RelicSet;
+import neptune.neptune.relic.RelicSetBonus;
+import neptune.neptune.unlock.UnlockData;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -32,6 +36,10 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
     // Buy page
     private static final int STOCK_START_Y = 35;
     private static final int STOCK_ENTRY_HEIGHT = 20;
+
+    // Scroll offset for buy tab (in case of many items)
+    private int buyScrollOffset = 0;
+    private static final int MAX_VISIBLE_ENTRIES = 8;
 
     public BrokerScreen(BrokerMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -87,18 +95,47 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
         graphics.drawString(this.font, this.playerInventoryTitle, this.leftPos + 8, this.topPos + this.imageHeight - 94, 0xAAAAAA, false);
     }
 
-    private void renderBuyTab(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(this.font, "Available Items:", this.leftPos + 8, this.topPos + 24, 0x888888, false);
+    private List<BrokerStock.StockEntry> getVisibleStock() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return BrokerStock.getVisibleStock(UnlockData.EMPTY);
+        UnlockData unlocks = mc.player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+        return BrokerStock.getVisibleStock(unlocks);
+    }
 
-        List<BrokerStock.StockEntry> stock = BrokerStock.getCoreStock();
+    private boolean hasExplorersBonus() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return false;
+        RelicJournalData journal = mc.player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+        return journal.isSetComplete(RelicSet.THE_EXPLORERS);
+    }
+
+    private int getDisplayCost(int baseCost) {
+        if (hasExplorersBonus()) {
+            return RelicSetBonus.applyExplorersDiscount(baseCost);
+        }
+        return baseCost;
+    }
+
+    private void renderBuyTab(GuiGraphics graphics, int mouseX, int mouseY) {
+        List<BrokerStock.StockEntry> stock = getVisibleStock();
+        boolean discount = hasExplorersBonus();
+
+        String header = discount ? "Available Items: §a(-15% Explorers)" : "Available Items:";
+        graphics.drawString(this.font, header, this.leftPos + 8, this.topPos + 24, 0x888888, false);
+
         Minecraft mc = Minecraft.getInstance();
         int currentEssence = 0;
         if (mc.player != null) {
             currentEssence = mc.player.getAttachedOrCreate(NeptuneAttachments.VOID_ESSENCE).current();
         }
 
-        for (int i = 0; i < stock.size(); i++) {
-            BrokerStock.StockEntry entry = stock.get(i);
+        // Clamp scroll
+        int maxScroll = Math.max(0, stock.size() - MAX_VISIBLE_ENTRIES);
+        buyScrollOffset = Math.min(buyScrollOffset, maxScroll);
+
+        int visibleCount = Math.min(stock.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
+        for (int i = 0; i < visibleCount; i++) {
+            BrokerStock.StockEntry entry = stock.get(i + buyScrollOffset);
             int y = this.topPos + STOCK_START_Y + i * STOCK_ENTRY_HEIGHT;
 
             // Highlight on hover
@@ -108,18 +145,33 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
                 graphics.fill(this.leftPos + 4, y, this.leftPos + this.imageWidth - 4, y + STOCK_ENTRY_HEIGHT, 0x40FFFFFF);
             }
 
-            // Affordable check
-            boolean canAfford = currentEssence >= entry.cost();
+            int displayCost = getDisplayCost(entry.cost());
+            boolean canAfford = currentEssence >= displayCost;
             int nameColor = canAfford ? 0xFFFFFF : 0x666666;
             int costColor = canAfford ? 0x55FF55 : 0xFF5555;
 
             // Name
             graphics.drawString(this.font, entry.name(), this.leftPos + 8, y + 6, nameColor, false);
 
-            // Cost
-            String costText = entry.cost() + " essence";
-            int costWidth = this.font.width(costText);
-            graphics.drawString(this.font, costText, this.leftPos + this.imageWidth - costWidth - 8, y + 6, costColor, false);
+            // Cost (show strikethrough original if discounted)
+            if (discount && entry.cost() != displayCost) {
+                String discountText = displayCost + " essence";
+                int discountWidth = this.font.width(discountText);
+                graphics.drawString(this.font, discountText, this.leftPos + this.imageWidth - discountWidth - 8, y + 6, costColor, false);
+            } else {
+                String costText = displayCost + " essence";
+                int costWidth = this.font.width(costText);
+                graphics.drawString(this.font, costText, this.leftPos + this.imageWidth - costWidth - 8, y + 6, costColor, false);
+            }
+        }
+
+        // Scroll indicators
+        if (buyScrollOffset > 0) {
+            graphics.drawString(this.font, "▲", this.leftPos + this.imageWidth / 2 - 3, this.topPos + STOCK_START_Y - 8, 0xAAAAAA, false);
+        }
+        if (buyScrollOffset < maxScroll) {
+            int bottomY = this.topPos + STOCK_START_Y + visibleCount * STOCK_ENTRY_HEIGHT;
+            graphics.drawString(this.font, "▼", this.leftPos + this.imageWidth / 2 - 3, bottomY + 2, 0xAAAAAA, false);
         }
     }
 
@@ -128,18 +180,34 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
         if (currentTab == Tab.BUY && event.button() == 0) {
             double mouseX = event.x();
             double mouseY = event.y();
-            List<BrokerStock.StockEntry> stock = BrokerStock.getCoreStock();
-            for (int i = 0; i < stock.size(); i++) {
+            List<BrokerStock.StockEntry> stock = getVisibleStock();
+            int visibleCount = Math.min(stock.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
+            for (int i = 0; i < visibleCount; i++) {
                 int y = this.topPos + STOCK_START_Y + i * STOCK_ENTRY_HEIGHT;
                 if (mouseX >= this.leftPos + 4 && mouseX <= this.leftPos + this.imageWidth - 4
                         && mouseY >= y && mouseY < y + STOCK_ENTRY_HEIGHT) {
-                    // Send purchase packet
-                    ClientPlayNetworking.send(new BrokerPurchasePayload(i));
+                    BrokerStock.StockEntry entry = stock.get(i + buyScrollOffset);
+                    ClientPlayNetworking.send(new BrokerPurchasePayload(entry.id()));
                     return true;
                 }
             }
         }
         return super.mouseClicked(event, forwarded);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (currentTab == Tab.BUY) {
+            List<BrokerStock.StockEntry> stock = getVisibleStock();
+            int maxScroll = Math.max(0, stock.size() - MAX_VISIBLE_ENTRIES);
+            if (scrollY > 0) {
+                buyScrollOffset = Math.max(0, buyScrollOffset - 1);
+            } else if (scrollY < 0) {
+                buyScrollOffset = Math.min(maxScroll, buyScrollOffset + 1);
+            }
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -166,17 +234,22 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
 
         // Buy tab tooltips
         if (currentTab == Tab.BUY) {
-            List<BrokerStock.StockEntry> stock = BrokerStock.getCoreStock();
-            for (int i = 0; i < stock.size(); i++) {
+            List<BrokerStock.StockEntry> stock = getVisibleStock();
+            int visibleCount = Math.min(stock.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
+            for (int i = 0; i < visibleCount; i++) {
                 int y = this.topPos + STOCK_START_Y + i * STOCK_ENTRY_HEIGHT;
                 if (mouseX >= this.leftPos + 4 && mouseX <= this.leftPos + this.imageWidth - 4
                         && mouseY >= y && mouseY < y + STOCK_ENTRY_HEIGHT) {
-                    BrokerStock.StockEntry entry = stock.get(i);
-                    List<Component> tooltip = List.of(
-                            Component.literal("§e" + entry.name()),
-                            Component.literal("§7" + entry.description()),
-                            Component.literal("§6Cost: " + entry.cost() + " essence")
-                    );
+                    BrokerStock.StockEntry entry = stock.get(i + buyScrollOffset);
+                    int displayCost = getDisplayCost(entry.cost());
+                    List<Component> tooltip = new ArrayList<>();
+                    tooltip.add(Component.literal("§e" + entry.name()));
+                    tooltip.add(Component.literal("§7" + entry.description()));
+                    if (hasExplorersBonus() && displayCost != entry.cost()) {
+                        tooltip.add(Component.literal("§6Cost: §m" + entry.cost() + "§r §a" + displayCost + " essence"));
+                    } else {
+                        tooltip.add(Component.literal("§6Cost: " + displayCost + " essence"));
+                    }
                     graphics.setComponentTooltipForNextFrame(this.font, tooltip, mouseX, mouseY);
                     break;
                 }

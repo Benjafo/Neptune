@@ -72,17 +72,24 @@ public class RelicLootHandler {
                 journal = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
             }
 
-            // 64% chance to drop a relic
-            if (RANDOM.nextFloat() >= RELIC_DROP_CHANCE) {
-                // No relic this city — still counts toward bad luck protection
-                if (player != null && journal != null) {
-                    player.setAttached(NeptuneAttachments.RELIC_JOURNAL, journal.withCityVisited(false));
+            // Check for forced relic tier from broker hint
+            boolean forcedTier = journal != null && journal.hasForcedTier();
+
+            if (forcedTier) {
+                // Forced tier: 100% drop chance, use forced rarity, then clear the flag
+            } else {
+                // Normal: 64% chance to drop a relic
+                if (RANDOM.nextFloat() >= RELIC_DROP_CHANCE) {
+                    // No relic this city — still counts toward bad luck protection
+                    if (player != null && journal != null) {
+                        player.setAttached(NeptuneAttachments.RELIC_JOURNAL, journal.withCityVisited(false));
+                    }
+                    return;
                 }
-                return;
             }
 
             // Pick rarity
-            RelicRarity rarity = rollRarity(journal);
+            RelicRarity rarity = forcedTier ? journal.getForcedRarity() : rollRarity(journal);
 
             // Pick a relic of that rarity, preferring undiscovered ones
             RelicDefinition def = pickRelic(rarity, journal);
@@ -92,10 +99,14 @@ public class RelicLootHandler {
             ItemStack relicStack = RelicItem.createStack(NeptuneItems.RELIC, def);
             drops.add(relicStack);
 
-            // Update journal counter
+            // Update journal counter and consume forced tier if active
             if (player != null && journal != null) {
                 boolean isLegendary = rarity == RelicRarity.LEGENDARY;
-                player.setAttached(NeptuneAttachments.RELIC_JOURNAL, journal.withCityVisited(isLegendary));
+                RelicJournalData updated = journal.withCityVisited(isLegendary);
+                if (forcedTier) {
+                    updated = updated.withForcedTierConsumed();
+                }
+                player.setAttached(NeptuneAttachments.RELIC_JOURNAL, updated);
             }
         });
     }

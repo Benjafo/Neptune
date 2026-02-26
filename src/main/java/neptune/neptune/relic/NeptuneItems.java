@@ -13,6 +13,12 @@ public class NeptuneItems {
             new RelicItem(new Item.Properties().stacksTo(1))
     );
 
+    public static final Item ENCHANTMENT_SHARD = Registry.register(
+            BuiltInRegistries.ITEM,
+            Identifier.fromNamespaceAndPath("neptune", "enchantment_shard"),
+            new Item(new Item.Properties().stacksTo(64))
+    );
+
     public static void register() {
         // Force static initialization
     }

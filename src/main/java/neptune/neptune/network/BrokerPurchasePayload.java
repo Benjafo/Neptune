@@ -9,14 +9,14 @@ import net.minecraft.resources.Identifier;
 /**
  * Client-to-server packet: player wants to buy an item from broker stock.
  */
-public record BrokerPurchasePayload(int stockIndex) implements CustomPacketPayload {
+public record BrokerPurchasePayload(String itemId) implements CustomPacketPayload {
 
     public static final Type<BrokerPurchasePayload> TYPE =
             new Type<>(Identifier.fromNamespaceAndPath("neptune", "broker_purchase"));
 
     public static final StreamCodec<ByteBuf, BrokerPurchasePayload> STREAM_CODEC =
             StreamCodec.composite(
-                    ByteBufCodecs.INT, BrokerPurchasePayload::stockIndex,
+                    ByteBufCodecs.STRING_UTF8, BrokerPurchasePayload::itemId,
                     BrokerPurchasePayload::new
             );
 

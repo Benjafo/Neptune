@@ -10,14 +10,16 @@ import java.util.*;
 
 /**
  * Tracks which relics a player has discovered (permanent journal).
- * Also tracks duplicate counts for infusion and cities-without-legendary for bad luck protection.
+ * Also tracks duplicate counts for infusion, cities-without-legendary for bad luck protection,
+ * and an optional forced relic tier from broker relic hints.
  */
 public record RelicJournalData(
         Set<String> discoveredIds,
         Map<String, Integer> duplicateCounts,
-        int citiesWithoutLegendary
+        int citiesWithoutLegendary,
+        String forcedRelicTier
 ) {
-    public static final RelicJournalData EMPTY = new RelicJournalData(Set.of(), Map.of(), 0);
+    public static final RelicJournalData EMPTY = new RelicJournalData(Set.of(), Map.of(), 0, "");
 
     public static final Codec<RelicJournalData> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
@@ -29,7 +31,9 @@ public record RelicJournalData(
                             .fieldOf("duplicateCounts")
                             .forGetter(d -> new HashMap<>(d.duplicateCounts)),
                     Codec.INT.fieldOf("citiesWithoutLegendary")
-                            .forGetter(RelicJournalData::citiesWithoutLegendary)
+                            .forGetter(RelicJournalData::citiesWithoutLegendary),
+                    Codec.STRING.optionalFieldOf("forcedRelicTier", "")
+                            .forGetter(RelicJournalData::forcedRelicTier)
             ).apply(instance, RelicJournalData::new)
     );
 
@@ -38,8 +42,27 @@ public record RelicJournalData(
             d -> new ArrayList<>(d.discoveredIds),
             ByteBufCodecs.INT,
             RelicJournalData::citiesWithoutLegendary,
-            (list, cities) -> new RelicJournalData(new HashSet<>(list), Map.of(), cities)
+            ByteBufCodecs.STRING_UTF8,
+            RelicJournalData::forcedRelicTier,
+            (list, cities, forced) -> new RelicJournalData(new HashSet<>(list), Map.of(), cities, forced)
     );
+
+    public boolean hasForcedTier() {
+        return forcedRelicTier != null && !forcedRelicTier.isEmpty();
+    }
+
+    public RelicRarity getForcedRarity() {
+        if (!hasForcedTier()) return null;
+        return RelicRarity.valueOf(forcedRelicTier);
+    }
+
+    public RelicJournalData withForcedTier(RelicRarity rarity) {
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, rarity.name());
+    }
+
+    public RelicJournalData withForcedTierConsumed() {
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, "");
+    }
 
     public boolean hasDiscovered(String relicId) {
         return discoveredIds.contains(relicId);
@@ -55,21 +78,20 @@ public record RelicJournalData(
 
     public RelicJournalData withDiscovery(String relicId) {
         if (discoveredIds.contains(relicId)) {
-            // Already discovered — increment duplicate count
             Map<String, Integer> newDupes = new HashMap<>(duplicateCounts);
             newDupes.merge(relicId, 1, Integer::sum);
-            return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary);
+            return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary, forcedRelicTier);
         }
         Set<String> newIds = new HashSet<>(discoveredIds);
         newIds.add(relicId);
-        return new RelicJournalData(Set.copyOf(newIds), duplicateCounts, citiesWithoutLegendary);
+        return new RelicJournalData(Set.copyOf(newIds), duplicateCounts, citiesWithoutLegendary, forcedRelicTier);
     }
 
     public RelicJournalData withCityVisited(boolean hadLegendary) {
         if (hadLegendary) {
-            return new RelicJournalData(discoveredIds, duplicateCounts, 0);
+            return new RelicJournalData(discoveredIds, duplicateCounts, 0, forcedRelicTier);
         }
-        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary + 1);
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary + 1, forcedRelicTier);
     }
 
     public int getCompletedMinorSets() {
