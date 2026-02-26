@@ -1,1 +1,24 @@
 This time I created a new map and loaded it at 0, 0 in the end. I saw my first end city when I was at -2053, -2138. When I started moving towards the city, I flew to -2458, -2181. Then I marked it. After that I flew to -2821, -2179. I was 2 squares to the right on the minimap. Is that correct? It seems like it only starts tracking the map when you mark your first city. Is this a UI thing or is there an error? 
+
+
+
+Based on the roadmap and PHASE4.md, you've completed:
+
+  - Task 1: Relic Items — data structures, journal, auto-register on pickup
+  - Task 2: Relic Spawning — loot table hooks, rarity logic, bad luck protection (just now)
+
+Next up in Phase 4:
+
+  1. Task 3: Relic Sets & Bonuses — Set completion detection and major set bonus application:
+    - Builders: +15% essence from selling
+    - Void: elytra -15% durability drain
+    - Inhabitants: shulker debuffs reduced
+    - Explorers: broker -15% cost
+  2. Task 4: Relic Journal UI — Client-side screen showing discovered/undiscovered relics by set, silhouettes for unfound, gated behind Catalog T1
+
+  After Phase 4 is done, you move to Phase 5: Unlock-Gated Broker Items (city maps, relic hints, repair kits, void elytra, pocket shulker, etc.).
+
+Start on Task 3 (Relic Sets & Bonuses).
+
+
+

@@ -272,8 +272,29 @@ public class NeptuneCommands {
                                         "  §7Standalone: §8(" + standalone + "/" + RelicSet.STANDALONE.getSize() + ")"));
                                 return 1;
                             }))
+                    .then(Commands.literal("bonuses")
+                            .executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                player.sendSystemMessage(Component.literal("§6=== Relic Set Bonuses ==="));
+                                showBonus(player, "The Builders", "+15% essence from selling",
+                                        RelicSetBonus.hasBuildersBonus(player));
+                                showBonus(player, "The Void", "Elytra -15% durability drain",
+                                        RelicSetBonus.hasVoidBonus(player));
+                                showBonus(player, "The Inhabitants", "Shulker debuffs reduced",
+                                        RelicSetBonus.hasInhabitantsBonus(player));
+                                showBonus(player, "The Explorers", "Broker items -15% cost",
+                                        RelicSetBonus.hasExplorersBonus(player));
+                                return 1;
+                            }))
             );
         });
+    }
+
+    private static void showBonus(ServerPlayer player, String setName, String description, boolean active) {
+        String status = active ? "§a✓ ACTIVE" : "§8✗ Locked";
+        String color = active ? "§e" : "§7";
+        player.sendSystemMessage(Component.literal(
+                "  " + status + " " + color + setName + "§7: " + description));
     }
 
     private static int showBalance(CommandSourceStack source) throws com.mojang.brigadier.exceptions.CommandSyntaxException {

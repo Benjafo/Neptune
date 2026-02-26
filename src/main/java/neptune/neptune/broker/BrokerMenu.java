@@ -3,6 +3,7 @@ package neptune.neptune.broker;
 import neptune.neptune.challenge.ChallengeTracker;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.data.VoidEssenceData;
+import neptune.neptune.relic.RelicSetBonus;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
@@ -42,12 +43,21 @@ public class BrokerMenu extends AbstractContainerMenu {
         int essenceGained = GearValueCalculator.roundValue(value);
         if (essenceGained <= 0) return;
 
+        // Apply Builders set bonus (+15% essence from selling)
+        if (RelicSetBonus.hasBuildersBonus(serverPlayer)) {
+            int boosted = RelicSetBonus.applyBuildersBonus(essenceGained);
+            int bonus = boosted - essenceGained;
+            essenceGained = boosted;
+            serverPlayer.sendSystemMessage(
+                    Component.literal("§aSold for §d" + essenceGained + " §avoid essence §7(+" + bonus + " Builders bonus)"));
+        } else {
+            serverPlayer.sendSystemMessage(
+                    Component.literal("§aSold for §d" + essenceGained + " §avoid essence"));
+        }
+
         VoidEssenceData current = serverPlayer.getAttachedOrCreate(NeptuneAttachments.VOID_ESSENCE);
         serverPlayer.setAttached(NeptuneAttachments.VOID_ESSENCE, current.add(essenceGained));
         slot.set(ItemStack.EMPTY);
-
-        serverPlayer.sendSystemMessage(
-                Component.literal("§aSold for §d" + essenceGained + " §avoid essence"));
 
         // Track challenges
         ChallengeTracker.onItemSold(serverPlayer, essenceGained);

@@ -3,6 +3,8 @@
 	"package": "neptune.neptune.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [
+		"ElytraDurabilityMixin",
+		"ShulkerBulletMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

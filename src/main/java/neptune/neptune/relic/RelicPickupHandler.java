@@ -49,16 +49,22 @@ public class RelicPickupHandler {
         if (isNew) {
             player.sendSystemMessage(Component.literal(
                     def.rarity().getColorCode() + "✦ New relic discovered: " + def.displayName() + "!"));
+
+            RelicJournalData updated = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+
             if (def.set() != RelicSet.STANDALONE) {
-                RelicJournalData updated = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
                 int progress = updated.getSetProgress(def.set());
                 int total = def.set().getSize();
                 player.sendSystemMessage(Component.literal(
                         "§7  Set: " + def.set().getDisplayName() + " (" + progress + "/" + total + ")"));
+
+                // Check if this relic completed a major set
+                if (def.set().isMajor() && updated.isSetComplete(def.set())) {
+                    announceSetCompletion(player, def.set());
+                }
             }
 
             // Track challenges
-            RelicJournalData updated = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
             ChallengeTracker.onRelicCollected(player, updated.getDiscoveredCount());
             if (def.rarity() == RelicRarity.LEGENDARY) {
                 ChallengeTracker.onLegendaryFound(player, updated.getLegendaryCount());
@@ -67,5 +73,20 @@ public class RelicPickupHandler {
             player.sendSystemMessage(Component.literal(
                     "§7Duplicate relic: " + def.displayName() + " (can sell or save for infusion)"));
         }
+    }
+
+    private static void announceSetCompletion(ServerPlayer player, RelicSet set) {
+        String bonusDescription = switch (set) {
+            case THE_BUILDERS -> "+15% essence from all gear sold";
+            case THE_VOID -> "Elytra durability drains 15% slower";
+            case THE_INHABITANTS -> "Shulker debuffs reduced: -20% duration, -25% damage";
+            case THE_EXPLORERS -> "All broker items 15% cheaper";
+            default -> "";
+        };
+
+        player.sendSystemMessage(Component.literal(""));
+        player.sendSystemMessage(Component.literal("§6§l★ Set Complete: " + set.getDisplayName() + "! ★"));
+        player.sendSystemMessage(Component.literal("§e  Bonus activated: " + bonusDescription));
+        player.sendSystemMessage(Component.literal(""));
     }
 }

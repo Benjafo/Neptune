@@ -9,6 +9,7 @@ import neptune.neptune.map.ClientMapState;
 import neptune.neptune.network.MapSyncPayload;
 import neptune.neptune.screen.BrokerScreen;
 import neptune.neptune.screen.EndMapScreen;
+import neptune.neptune.screen.RelicJournalScreen;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.unlock.UnlockBranch;
 import neptune.neptune.unlock.UnlockData;
@@ -28,6 +29,7 @@ public class NeptuneClient implements ClientModInitializer {
 
     public static KeyMapping TOGGLE_MINIMAP_KEY;
     public static KeyMapping OPEN_FULLMAP_KEY;
+    public static KeyMapping OPEN_JOURNAL_KEY;
 
     @Override
     public void onInitializeClient() {
@@ -56,6 +58,13 @@ public class NeptuneClient implements ClientModInitializer {
                 KeyMapping.Category.MISC
         ));
 
+        OPEN_JOURNAL_KEY = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.neptune.open_journal",
+                InputConstants.Type.KEYSYM,
+                GLFW.GLFW_KEY_J,
+                KeyMapping.Category.MISC
+        ));
+
         // Client tick — check keybinds (gated by Navigation unlocks)
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.player == null) return;
@@ -76,6 +85,16 @@ public class NeptuneClient implements ClientModInitializer {
                     } else {
                         client.player.displayClientMessage(
                                 Component.literal("§cRequires Navigation T1 (Cartographer's Basics) to open the map."), false);
+                    }
+                }
+            }
+            if (OPEN_JOURNAL_KEY.consumeClick()) {
+                if (client.screen == null) {
+                    if (unlocks.hasTier(UnlockBranch.CATALOG, 1)) {
+                        client.setScreen(new RelicJournalScreen());
+                    } else {
+                        client.player.displayClientMessage(
+                                Component.literal("§cRequires Catalog T1 (Collector) to open the relic journal."), false);
                     }
                 }
             }
