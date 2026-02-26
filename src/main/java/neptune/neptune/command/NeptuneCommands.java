@@ -11,6 +11,7 @@ import neptune.neptune.data.VoidEssenceData;
 import neptune.neptune.entity.BrokerEntity;
 import neptune.neptune.entity.NeptuneEntities;
 import neptune.neptune.map.EndMapCommands;
+import neptune.neptune.relic.*;
 import neptune.neptune.unlock.UnlockData;
 import neptune.neptune.unlock.UnlockManager;
 import neptune.neptune.unlock.UnlockType;
@@ -38,6 +39,12 @@ public class NeptuneCommands {
     private static final SuggestionProvider<CommandSourceStack> CHALLENGE_SUGGESTIONS = (context, builder) ->
             SharedSuggestionProvider.suggest(
                     Arrays.stream(ChallengeType.values()).map(Enum::name),
+                    builder
+            );
+
+    private static final SuggestionProvider<CommandSourceStack> RELIC_SUGGESTIONS = (context, builder) ->
+            SharedSuggestionProvider.suggest(
+                    RelicDefinition.getAll().stream().map(RelicDefinition::id),
                     builder
             );
 
@@ -216,6 +223,55 @@ public class NeptuneCommands {
                                 "§6Challenges: " + challenges.totalCompleted() + "/45 complete. Use /challenges list for details."));
                         return 1;
                     })
+            );
+
+            // Relic commands
+            dispatcher.register(Commands.literal("relic")
+                    .then(Commands.literal("give")
+                            .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                            .then(Commands.argument("id", StringArgumentType.word())
+                                    .suggests(RELIC_SUGGESTIONS)
+                                    .executes(context -> {
+                                        ServerPlayer player = context.getSource().getPlayerOrException();
+                                        String id = StringArgumentType.getString(context, "id");
+                                        RelicDefinition def = RelicDefinition.get(id);
+                                        if (def == null) {
+                                            context.getSource().sendFailure(Component.literal("§cUnknown relic: " + id));
+                                            return 0;
+                                        }
+                                        net.minecraft.world.item.ItemStack stack = RelicItem.createStack(NeptuneItems.RELIC, def);
+                                        if (!player.getInventory().add(stack)) {
+                                            player.drop(stack, false);
+                                        }
+                                        context.getSource().sendSuccess(
+                                                () -> Component.literal("§aGave relic: " + def.displayName()), true);
+                                        return 1;
+                                    })))
+                    .then(Commands.literal("journal")
+                            .executes(context -> {
+                                ServerPlayer player = context.getSource().getPlayerOrException();
+                                RelicJournalData journal = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+                                player.sendSystemMessage(Component.literal(
+                                        "§6=== Relic Journal ==="));
+                                player.sendSystemMessage(Component.literal(
+                                        "§fDiscovered: §d" + journal.getDiscoveredCount() + "§f/" + RelicDefinition.totalCount()));
+                                for (RelicSet set : RelicSet.values()) {
+                                    if (set == RelicSet.STANDALONE) continue;
+                                    int progress = journal.getSetProgress(set);
+                                    int total = set.getSize();
+                                    boolean complete = journal.isSetComplete(set);
+                                    String icon = complete ? "§a✓" : "§7○";
+                                    String label = set.isMajor() ? "§e" : "§7";
+                                    player.sendSystemMessage(Component.literal(
+                                            "  " + icon + " " + label + set.getDisplayName()
+                                                    + " §8(" + progress + "/" + total + ")"));
+                                }
+                                int standalone = (int) RelicDefinition.getBySet(RelicSet.STANDALONE).stream()
+                                        .filter(r -> journal.hasDiscovered(r.id())).count();
+                                player.sendSystemMessage(Component.literal(
+                                        "  §7Standalone: §8(" + standalone + "/" + RelicSet.STANDALONE.getSize() + ")"));
+                                return 1;
+                            }))
             );
         });
     }

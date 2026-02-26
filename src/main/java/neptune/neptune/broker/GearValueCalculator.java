@@ -10,6 +10,10 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
+import neptune.neptune.relic.RelicDefinition;
+import neptune.neptune.relic.RelicItem;
+import neptune.neptune.relic.NeptuneItems;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -148,6 +152,13 @@ public class GearValueCalculator {
 
         Item item = stack.getItem();
 
+        // Relics use a fixed value based on rarity
+        if (item == NeptuneItems.RELIC) {
+            RelicDefinition def = RelicItem.getDefinition(stack);
+            if (def != null) return def.rarity().getSellValue();
+            return 0;
+        }
+
         // Check if it's gear (with base value calculation)
         Float gearBase = BASE_VALUES.get(item);
         if (gearBase != null) {
@@ -241,6 +252,20 @@ public class GearValueCalculator {
     public static boolean isSellable(ItemStack stack) {
         if (stack.isEmpty()) return false;
         Item item = stack.getItem();
+        if (item == NeptuneItems.RELIC) return true;
         return BASE_VALUES.containsKey(item) || OTHER_VALUES.containsKey(item) || item == Items.ENCHANTED_BOOK;
+    }
+
+    /**
+     * Calculate relic sell value. Checks if this is a duplicate in the player's journal.
+     * Note: Catalog T1 bonus (+50%) is applied separately by the broker.
+     */
+    public static float calculateRelicValue(ItemStack stack, boolean isDuplicate) {
+        RelicDefinition def = RelicItem.getDefinition(stack);
+        if (def == null) return 0;
+        if (isDuplicate) {
+            return def.rarity().getDuplicateSellValue();
+        }
+        return def.rarity().getSellValue();
     }
 }
