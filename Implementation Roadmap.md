@@ -1,5 +1,5 @@
 Implementation Roadmap
-Phase 1: Foundation (Economy Core)
+Phase 1: Foundation (Economy Core) ✅
 Goal: Establish the basic economic loop - earn and spend essence
 
 Void Essence System
@@ -38,7 +38,7 @@ Test: Buy items, verify essence deducted, items received
 
 Milestone: Basic loop works - kill shulkers, sell gear, buy consumables
 
-Phase 2: Progression Framework
+Phase 2: Progression Framework ✅
 Goal: Add the unlock tree and challenge tracking
 
 Unlock Tree Structure
@@ -69,7 +69,7 @@ Test: Complete challenges, verify they gate unlocks correctly
 
 Milestone: Full progression system works - challenges track, unlocks gate properly
 
-Phase 3: First Major Feature (Map System)
+Phase 3: First Major Feature (Map System) ✅
 Goal: Implement the first unlock-gated feature to prove the system works
 
 Map System Core

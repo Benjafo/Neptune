@@ -9,6 +9,9 @@ import neptune.neptune.map.ClientMapState;
 import neptune.neptune.network.MapSyncPayload;
 import neptune.neptune.screen.BrokerScreen;
 import neptune.neptune.screen.EndMapScreen;
+import neptune.neptune.data.NeptuneAttachments;
+import neptune.neptune.unlock.UnlockBranch;
+import neptune.neptune.unlock.UnlockData;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -17,6 +20,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.network.chat.Component;
 import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 
@@ -52,14 +56,27 @@ public class NeptuneClient implements ClientModInitializer {
                 KeyMapping.Category.MISC
         ));
 
-        // Client tick — check keybinds
+        // Client tick — check keybinds (gated by Navigation unlocks)
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player == null) return;
+            UnlockData unlocks = client.player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+
             if (TOGGLE_MINIMAP_KEY.consumeClick()) {
-                ClientMapState.toggleMinimap();
+                if (unlocks.hasTier(UnlockBranch.NAVIGATION, 2)) {
+                    ClientMapState.toggleMinimap();
+                } else {
+                    client.player.displayClientMessage(
+                            Component.literal("§cRequires Navigation T2 (Wayfinder) to use the minimap."), false);
+                }
             }
             if (OPEN_FULLMAP_KEY.consumeClick()) {
                 if (client.screen == null) {
-                    client.setScreen(new EndMapScreen());
+                    if (unlocks.hasTier(UnlockBranch.NAVIGATION, 1)) {
+                        client.setScreen(new EndMapScreen());
+                    } else {
+                        client.player.displayClientMessage(
+                                Component.literal("§cRequires Navigation T1 (Cartographer's Basics) to open the map."), false);
+                    }
                 }
             }
         });

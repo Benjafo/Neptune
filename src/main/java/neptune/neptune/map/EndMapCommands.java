@@ -12,14 +12,29 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 
+import neptune.neptune.unlock.UnlockBranch;
+import neptune.neptune.unlock.UnlockData;
 import neptune.neptune.network.NeptuneNetworking;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 
 public class EndMapCommands {
 
+    private static boolean hasNavigationT1(ServerPlayer player) {
+        UnlockData unlocks = player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+        return unlocks.hasTier(UnlockBranch.NAVIGATION, 1);
+    }
+
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("endmap")
+                .requires(source -> {
+                    try {
+                        ServerPlayer player = source.getPlayerOrException();
+                        return hasNavigationT1(player);
+                    } catch (Exception e) {
+                        return false;
+                    }
+                })
                 .then(Commands.literal("create")
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .then(Commands.argument("gridsize", IntegerArgumentType.integer(64, 2048))

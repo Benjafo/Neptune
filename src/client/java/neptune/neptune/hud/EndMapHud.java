@@ -1,6 +1,9 @@
 package neptune.neptune.hud;
 
+import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.map.ClientMapState;
+import neptune.neptune.unlock.UnlockBranch;
+import neptune.neptune.unlock.UnlockData;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.DeltaTracker;
@@ -50,6 +53,10 @@ public class EndMapHud {
         if (mc.player.level().dimension() != Level.END) return;
         if (!ClientMapState.hasLoadedMap()) return;
         if (!ClientMapState.isMinimapVisible()) return;
+
+        // Minimap requires Navigation T2
+        UnlockData unlocks = mc.player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+        if (!unlocks.hasTier(UnlockBranch.NAVIGATION, 2)) return;
 
         int screenWidth = mc.getWindow().getGuiScaledWidth();
 
