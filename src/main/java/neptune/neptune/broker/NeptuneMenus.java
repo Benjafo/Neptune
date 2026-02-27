@@ -1,7 +1,6 @@
 package neptune.neptune.broker;
 
-import neptune.neptune.processing.BreakdownTableMenu;
-import neptune.neptune.processing.ShardInfuserMenu;
+import neptune.neptune.processing.*;
 import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -28,6 +27,24 @@ public class NeptuneMenus {
             BuiltInRegistries.MENU,
             Identifier.fromNamespaceAndPath("neptune", "shard_infuser"),
             new ExtendedScreenHandlerType<>(ShardInfuserMenu::new, BlockPos.STREAM_CODEC)
+    );
+
+    public static final MenuType<VoidPouchMenu> VOID_POUCH_MENU = Registry.register(
+            BuiltInRegistries.MENU,
+            Identifier.fromNamespaceAndPath("neptune", "void_pouch"),
+            new MenuType<>(VoidPouchMenu::new, FeatureFlags.DEFAULT_FLAGS)
+    );
+
+    public static final ExtendedScreenHandlerType<RelicInfuserMenu, BlockPos> RELIC_INFUSER_MENU = Registry.register(
+            BuiltInRegistries.MENU,
+            Identifier.fromNamespaceAndPath("neptune", "relic_infuser"),
+            new ExtendedScreenHandlerType<>(RelicInfuserMenu::new, BlockPos.STREAM_CODEC)
+    );
+
+    public static final ExtendedScreenHandlerType<WaypointMenu, BlockPos> WAYPOINT_MENU = Registry.register(
+            BuiltInRegistries.MENU,
+            Identifier.fromNamespaceAndPath("neptune", "waypoint"),
+            new ExtendedScreenHandlerType<>(WaypointMenu::new, BlockPos.STREAM_CODEC)
     );
 
     public static void register() {

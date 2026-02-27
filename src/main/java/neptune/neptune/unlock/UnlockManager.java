@@ -120,6 +120,15 @@ public class UnlockManager {
                 // Relics sell for +50% (handled by checking unlock state)
                 player.sendSystemMessage(Component.literal("§eRelics now sell for 50% more!"));
             }
+            case PROCESSING_T3 -> {
+                player.sendSystemMessage(Component.literal("§eVoid Synthesis unlocked! Craft new items at the Breakdown Table."));
+            }
+            case PROCESSING_T4 -> {
+                player.sendSystemMessage(Component.literal("§eMaster Artificer unlocked! Relic Infusion, Elytra Boosters, and Portable Ender Chest available."));
+            }
+            case NAVIGATION_T4 -> {
+                player.sendSystemMessage(Component.literal("§eEnd Cartographer unlocked! Place Waypoint Beacons to teleport across the End."));
+            }
             default -> {
                 // Other unlocks enable features passively (checked when features are used)
             }

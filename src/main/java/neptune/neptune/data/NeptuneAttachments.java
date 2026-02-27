@@ -55,6 +55,22 @@ public class NeptuneAttachments {
                     .copyOnDeath()
     );
 
+    public static final AttachmentType<InfusionData> INFUSION = AttachmentRegistry.create(
+            Identifier.fromNamespaceAndPath("neptune", "infusion"),
+            builder -> builder
+                    .initializer(() -> InfusionData.EMPTY)
+                    .persistent(InfusionData.CODEC)
+                    .copyOnDeath()
+    );
+
+    public static final AttachmentType<WaypointData> WAYPOINTS = AttachmentRegistry.create(
+            Identifier.fromNamespaceAndPath("neptune", "waypoints"),
+            builder -> builder
+                    .initializer(() -> WaypointData.EMPTY)
+                    .persistent(WaypointData.CODEC)
+                    .copyOnDeath()
+    );
+
     public static final AttachmentType<MapCollectionData> MAPS = AttachmentRegistry.create(
             Identifier.fromNamespaceAndPath("neptune", "maps"),
             builder -> builder

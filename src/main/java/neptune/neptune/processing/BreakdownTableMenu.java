@@ -57,6 +57,78 @@ public class BreakdownTableMenu extends AbstractContainerMenu {
     }
 
     /**
+     * Handle a craft action from a packet (Void Synthesis).
+     */
+    public void handleCraft(ServerPlayer player, int recipeIndex) {
+        VoidSynthesisRecipe recipe = VoidSynthesisRecipe.getByIndex(recipeIndex);
+        if (recipe == null) return;
+
+        UnlockData unlocks = player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+        if (!unlocks.hasTier(UnlockBranch.PROCESSING, recipe.requiredTier())) {
+            player.sendSystemMessage(Component.literal("§cRequires Processing T" + recipe.requiredTier() + "!"));
+            return;
+        }
+
+        // Check ingredients
+        for (VoidSynthesisRecipe.Ingredient ing : recipe.ingredients()) {
+            int have = countItem(player, ing.item());
+            if (have < ing.count()) {
+                player.sendSystemMessage(Component.literal("§cMissing ingredients!"));
+                return;
+            }
+        }
+
+        // Check shards
+        int shardCount = ShardInfuserMenu.countShards(player);
+        if (shardCount < recipe.shardCost()) {
+            player.sendSystemMessage(Component.literal("§cNot enough shards! Need " + recipe.shardCost() + ", have " + shardCount));
+            return;
+        }
+
+        // Consume ingredients
+        for (VoidSynthesisRecipe.Ingredient ing : recipe.ingredients()) {
+            consumeItem(player, ing.item(), ing.count());
+        }
+
+        // Consume shards
+        ShardInfuserMenu.consumeShards(player, recipe.shardCost());
+
+        // Give result
+        ItemStack result = recipe.result().copy();
+        if (!player.getInventory().add(result)) {
+            player.drop(result, false);
+        }
+
+        player.sendSystemMessage(Component.literal("§aCrafted " + recipe.displayName() + "!"));
+    }
+
+    private static int countItem(ServerPlayer player, net.minecraft.world.item.Item item) {
+        int count = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.is(item)) {
+                count += stack.getCount();
+            }
+        }
+        return count;
+    }
+
+    private static void consumeItem(ServerPlayer player, net.minecraft.world.item.Item item, int amount) {
+        int remaining = amount;
+        for (int i = 0; i < player.getInventory().getContainerSize() && remaining > 0; i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (stack.is(item)) {
+                int take = Math.min(remaining, stack.getCount());
+                stack.shrink(take);
+                remaining -= take;
+                if (stack.isEmpty()) {
+                    player.getInventory().setItem(i, ItemStack.EMPTY);
+                }
+            }
+        }
+    }
+
+    /**
      * Handle an extract action from a packet.
      */
     public void handleExtract(ServerPlayer player, int slotIndex) {

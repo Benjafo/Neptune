@@ -6,13 +6,8 @@ import neptune.neptune.entity.NeptuneEntities;
 import neptune.neptune.hud.EndMapHud;
 import neptune.neptune.hud.VoidEssenceHud;
 import neptune.neptune.map.ClientMapState;
-import neptune.neptune.network.MapSyncPayload;
-import neptune.neptune.network.ShardInfuserSyncPayload;
-import neptune.neptune.screen.BrokerScreen;
-import neptune.neptune.screen.BreakdownTableScreen;
-import neptune.neptune.screen.EndMapScreen;
-import neptune.neptune.screen.RelicJournalScreen;
-import neptune.neptune.screen.ShardInfuserScreen;
+import neptune.neptune.network.*;
+import neptune.neptune.screen.*;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.unlock.UnlockBranch;
 import neptune.neptune.unlock.UnlockData;
@@ -43,6 +38,9 @@ public class NeptuneClient implements ClientModInitializer {
         MenuScreens.register(NeptuneMenus.BROKER_MENU, BrokerScreen::new);
         MenuScreens.register(NeptuneMenus.BREAKDOWN_TABLE_MENU, BreakdownTableScreen::new);
         MenuScreens.register(NeptuneMenus.SHARD_INFUSER_MENU, ShardInfuserScreen::new);
+        MenuScreens.register(NeptuneMenus.VOID_POUCH_MENU, VoidPouchScreen::new);
+        MenuScreens.register(NeptuneMenus.RELIC_INFUSER_MENU, RelicInfuserScreen::new);
+        MenuScreens.register(NeptuneMenus.WAYPOINT_MENU, WaypointScreen::new);
 
         // HUD elements
         VoidEssenceHud.register();
@@ -114,6 +112,22 @@ public class NeptuneClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(ShardInfuserSyncPayload.TYPE, (payload, context) -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.screen instanceof ShardInfuserScreen screen) {
+                screen.handleSync(payload);
+            }
+        });
+
+        // Receive relic infuser sync packets
+        ClientPlayNetworking.registerGlobalReceiver(RelicInfuserSyncPayload.TYPE, (payload, context) -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.screen instanceof RelicInfuserScreen screen) {
+                screen.handleSync(payload);
+            }
+        });
+
+        // Receive waypoint sync packets
+        ClientPlayNetworking.registerGlobalReceiver(WaypointSyncPayload.TYPE, (payload, context) -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.screen instanceof WaypointScreen screen) {
                 screen.handleSync(payload);
             }
         });

@@ -130,6 +130,28 @@ public record RelicJournalData(
         return count;
     }
 
+    public RelicJournalData consumeDuplicates(String relicId, int count) {
+        Map<String, Integer> newDupes = new HashMap<>(duplicateCounts);
+        int current = newDupes.getOrDefault(relicId, 0);
+        int remaining = Math.max(0, current - count);
+        if (remaining == 0) {
+            newDupes.remove(relicId);
+        } else {
+            newDupes.put(relicId, remaining);
+        }
+        return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary, forcedRelicTier);
+    }
+
+    public List<String> getInfusableRelicIds() {
+        List<String> result = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : duplicateCounts.entrySet()) {
+            if (entry.getValue() >= 20) {
+                result.add(entry.getKey());
+            }
+        }
+        return result;
+    }
+
     public boolean hasAnyLegendary() {
         return discoveredIds.stream()
                 .map(RelicDefinition::get)

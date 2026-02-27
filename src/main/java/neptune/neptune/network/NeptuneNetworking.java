@@ -2,9 +2,7 @@ package neptune.neptune.network;
 
 import neptune.neptune.broker.BrokerStock;
 import neptune.neptune.broker.StructureFinder;
-import neptune.neptune.data.BlockPlacementsData;
-import neptune.neptune.data.NeptuneAttachments;
-import neptune.neptune.data.VoidEssenceData;
+import neptune.neptune.data.*;
 import neptune.neptune.map.EndMapData;
 import neptune.neptune.map.MapCollectionData;
 import neptune.neptune.processing.*;
@@ -37,12 +35,16 @@ public class NeptuneNetworking {
         PayloadTypeRegistry.playC2S().register(ShardInfuserSetGearPayload.TYPE, ShardInfuserSetGearPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(ShardInfuserRetrievePayload.TYPE, ShardInfuserRetrievePayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(ShardApplyPayload.TYPE, ShardApplyPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(RelicInfusePayload.TYPE, RelicInfusePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(WaypointTeleportPayload.TYPE, WaypointTeleportPayload.STREAM_CODEC);
 
         // Register S2C packets
         PayloadTypeRegistry.playS2C().register(MapSyncPayload.TYPE, MapSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(ShardInfuserSyncPayload.TYPE, ShardInfuserSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(RelicInfuserSyncPayload.TYPE, RelicInfuserSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(WaypointSyncPayload.TYPE, WaypointSyncPayload.STREAM_CODEC);
 
-        // Sync map data and validate block placements when player joins
+        // Sync map data, validate block placements, apply infusion on join
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayer player = handler.player;
             MapCollectionData maps = player.getAttachedOrCreate(NeptuneAttachments.MAPS);
@@ -50,6 +52,8 @@ public class NeptuneNetworking {
                 syncMapToClient(player);
             }
             validateBlockPlacements(player);
+            applyInfusionOnJoin(player);
+            validateWaypoints(player);
         });
 
         // Handle breakdown table actions
@@ -60,6 +64,7 @@ public class NeptuneNetworking {
             switch (payload.action()) {
                 case "sell" -> menu.handleSell(player, payload.slotIndex());
                 case "extract" -> menu.handleExtract(player, payload.slotIndex());
+                case "craft" -> menu.handleCraft(player, payload.slotIndex());
             }
         });
 
@@ -85,6 +90,24 @@ public class NeptuneNetworking {
             if (!(player.containerMenu instanceof ShardInfuserMenu menu)) return;
             if (!menu.getPos().equals(payload.pos())) return;
             menu.handleApplyEnchantment(player, payload.enchantIndex());
+        });
+
+        // Handle relic infuse
+        ServerPlayNetworking.registerGlobalReceiver(RelicInfusePayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (!(player.containerMenu instanceof RelicInfuserMenu menu)) return;
+            if (!menu.getPos().equals(payload.pos())) return;
+            menu.handleInfuse(player, payload.relicId(), payload.buffChoice());
+            // Re-sync infusable relics after infusion
+            syncRelicInfuserToClient(player);
+        });
+
+        // Handle waypoint teleport
+        ServerPlayNetworking.registerGlobalReceiver(WaypointTeleportPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (!(player.containerMenu instanceof WaypointMenu menu)) return;
+            if (!menu.getPos().equals(payload.fromPos())) return;
+            menu.handleTeleport(player, payload.waypointIndex());
         });
 
         // Handle broker purchase
@@ -238,6 +261,82 @@ public class NeptuneNetworking {
         });
     }
 
+    /**
+     * Sync infusable relic data to client for the Relic Infuser screen.
+     */
+    public static void syncRelicInfuserToClient(ServerPlayer player) {
+        RelicJournalData journal = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+        List<String> infusableIds = journal.getInfusableRelicIds();
+        List<RelicInfuserSyncPayload.InfusableEntry> entries = new ArrayList<>();
+
+        for (String relicId : infusableIds) {
+            RelicDefinition def = RelicDefinition.get(relicId);
+            String name = def != null ? def.displayName() : relicId;
+            int dupes = journal.getDuplicateCount(relicId);
+            entries.add(new RelicInfuserSyncPayload.InfusableEntry(relicId, name, dupes));
+        }
+
+        ServerPlayNetworking.send(player, new RelicInfuserSyncPayload(entries));
+    }
+
+    /**
+     * Sync waypoint data to client for the Waypoint screen.
+     */
+    public static void syncWaypointsToClient(ServerPlayer player, BlockPos currentPos) {
+        WaypointData waypoints = player.getAttachedOrCreate(NeptuneAttachments.WAYPOINTS);
+        List<WaypointSyncPayload.WaypointEntry> entries = new ArrayList<>();
+
+        for (WaypointData.Waypoint wp : waypoints.getWaypoints()) {
+            double distance = Math.sqrt(currentPos.distSqr(wp.pos()));
+            int cost = 20 + (int)(distance / 1000) * 5;
+            entries.add(new WaypointSyncPayload.WaypointEntry(wp.name(), wp.pos(), cost));
+        }
+
+        ServerPlayNetworking.send(player, new WaypointSyncPayload(entries));
+    }
+
+    /**
+     * Apply infusion attribute modifiers on player join.
+     */
+    private static void applyInfusionOnJoin(ServerPlayer player) {
+        InfusionData infusion = player.getAttachedOrCreate(NeptuneAttachments.INFUSION);
+        if (infusion.infusionCount() > 0) {
+            RelicInfuserMenu.applyInfusionAttributes(player, infusion);
+        }
+    }
+
+    /**
+     * Validate that waypoint beacons still exist. Called on player join.
+     */
+    private static void validateWaypoints(ServerPlayer player) {
+        WaypointData waypoints = player.getAttachedOrCreate(NeptuneAttachments.WAYPOINTS);
+        boolean changed = false;
+        List<WaypointData.Waypoint> valid = new ArrayList<>();
+
+        for (WaypointData.Waypoint wp : waypoints.getWaypoints()) {
+            boolean stillPlaced = false;
+            boolean anyLoaded = false;
+            for (ServerLevel level : player.level().getServer().getAllLevels()) {
+                if (level.isLoaded(wp.pos())) {
+                    anyLoaded = true;
+                    if (level.getBlockState(wp.pos()).is(NeptuneBlocks.WAYPOINT_BEACON)) {
+                        stillPlaced = true;
+                    }
+                    break;
+                }
+            }
+            if (!anyLoaded || stillPlaced) {
+                valid.add(wp);
+            } else {
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            player.setAttached(NeptuneAttachments.WAYPOINTS, new WaypointData(List.copyOf(valid)));
+        }
+    }
+
     private static void giveItem(ServerPlayer player, ItemStack stack) {
         if (!player.getInventory().add(stack)) {
             player.drop(stack, false);
@@ -284,6 +383,14 @@ public class NeptuneNetworking {
             BlockPos pos = placements.shardInfuserPos().get();
             if (!isBlockStillPlaced(player, pos, NeptuneBlocks.SHARD_INFUSER)) {
                 placements = placements.withoutShardInfuser();
+                changed = true;
+            }
+        }
+
+        if (placements.hasRelicInfuser()) {
+            BlockPos pos = placements.relicInfuserPos().get();
+            if (!isBlockStillPlaced(player, pos, NeptuneBlocks.RELIC_INFUSER)) {
+                placements = placements.withoutRelicInfuser();
                 changed = true;
             }
         }
