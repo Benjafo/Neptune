@@ -2,10 +2,12 @@ package neptune.neptune.network;
 
 import neptune.neptune.broker.BrokerStock;
 import neptune.neptune.broker.StructureFinder;
+import neptune.neptune.data.BlockPlacementsData;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.data.VoidEssenceData;
 import neptune.neptune.map.EndMapData;
 import neptune.neptune.map.MapCollectionData;
+import neptune.neptune.processing.*;
 import neptune.neptune.relic.*;
 import neptune.neptune.unlock.UnlockData;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
@@ -14,6 +16,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -30,17 +33,58 @@ public class NeptuneNetworking {
     public static void register() {
         // Register C2S packets
         PayloadTypeRegistry.playC2S().register(BrokerPurchasePayload.TYPE, BrokerPurchasePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(BreakdownActionPayload.TYPE, BreakdownActionPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(ShardInfuserSetGearPayload.TYPE, ShardInfuserSetGearPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(ShardInfuserRetrievePayload.TYPE, ShardInfuserRetrievePayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(ShardApplyPayload.TYPE, ShardApplyPayload.STREAM_CODEC);
 
         // Register S2C packets
         PayloadTypeRegistry.playS2C().register(MapSyncPayload.TYPE, MapSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(ShardInfuserSyncPayload.TYPE, ShardInfuserSyncPayload.STREAM_CODEC);
 
-        // Sync map data when player joins
+        // Sync map data and validate block placements when player joins
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             ServerPlayer player = handler.player;
             MapCollectionData maps = player.getAttachedOrCreate(NeptuneAttachments.MAPS);
             if (maps.getLoadedMap() != null) {
                 syncMapToClient(player);
             }
+            validateBlockPlacements(player);
+        });
+
+        // Handle breakdown table actions
+        ServerPlayNetworking.registerGlobalReceiver(BreakdownActionPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (!(player.containerMenu instanceof BreakdownTableMenu menu)) return;
+
+            switch (payload.action()) {
+                case "sell" -> menu.handleSell(player, payload.slotIndex());
+                case "extract" -> menu.handleExtract(player, payload.slotIndex());
+            }
+        });
+
+        // Handle shard infuser set gear
+        ServerPlayNetworking.registerGlobalReceiver(ShardInfuserSetGearPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (!(player.containerMenu instanceof ShardInfuserMenu menu)) return;
+            if (!menu.getPos().equals(payload.pos())) return;
+            menu.handleSetGear(player, payload.inventorySlot());
+        });
+
+        // Handle shard infuser retrieve gear
+        ServerPlayNetworking.registerGlobalReceiver(ShardInfuserRetrievePayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (!(player.containerMenu instanceof ShardInfuserMenu menu)) return;
+            if (!menu.getPos().equals(payload.pos())) return;
+            menu.handleRetrieveGear(player);
+        });
+
+        // Handle shard apply
+        ServerPlayNetworking.registerGlobalReceiver(ShardApplyPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            if (!(player.containerMenu instanceof ShardInfuserMenu menu)) return;
+            if (!menu.getPos().equals(payload.pos())) return;
+            menu.handleApplyEnchantment(player, payload.enchantIndex());
         });
 
         // Handle broker purchase
@@ -198,6 +242,73 @@ public class NeptuneNetworking {
         if (!player.getInventory().add(stack)) {
             player.drop(stack, false);
         }
+    }
+
+    /**
+     * Sync shard infuser state to the client for rendering.
+     */
+    public static void syncShardInfuserToClient(ServerPlayer player, BlockPos pos) {
+        if (!(player.level().getBlockEntity(pos) instanceof ShardInfuserBlockEntity be)) return;
+
+        ItemStack gear = be.getGearSlot();
+        List<ShardInfuserSyncPayload.EnchantEntry> entries = new ArrayList<>();
+
+        if (!gear.isEmpty()) {
+            List<EnchantmentShardHelper.ApplicableEnchantment> applicable =
+                    EnchantmentShardHelper.getApplicableEnchantments(gear, player.level().registryAccess());
+            for (EnchantmentShardHelper.ApplicableEnchantment ae : applicable) {
+                entries.add(new ShardInfuserSyncPayload.EnchantEntry(
+                        ae.getDisplayName(), ae.targetLevel(), ae.shardCost()));
+            }
+        }
+
+        ServerPlayNetworking.send(player, new ShardInfuserSyncPayload(gear.copy(), entries));
+    }
+
+    /**
+     * Validate that tracked block placements still exist. Called on player join.
+     */
+    private static void validateBlockPlacements(ServerPlayer player) {
+        BlockPlacementsData placements = player.getAttachedOrCreate(NeptuneAttachments.BLOCK_PLACEMENTS);
+        boolean changed = false;
+
+        if (placements.hasBreakdownTable()) {
+            BlockPos pos = placements.breakdownTablePos().get();
+            if (!isBlockStillPlaced(player, pos, NeptuneBlocks.BREAKDOWN_TABLE)) {
+                placements = placements.withoutBreakdownTable();
+                changed = true;
+            }
+        }
+
+        if (placements.hasShardInfuser()) {
+            BlockPos pos = placements.shardInfuserPos().get();
+            if (!isBlockStillPlaced(player, pos, NeptuneBlocks.SHARD_INFUSER)) {
+                placements = placements.withoutShardInfuser();
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            player.setAttached(NeptuneAttachments.BLOCK_PLACEMENTS, placements);
+        }
+    }
+
+    private static boolean isBlockStillPlaced(ServerPlayer player, BlockPos pos, net.minecraft.world.level.block.Block block) {
+        for (ServerLevel level : player.level().getServer().getAllLevels()) {
+            if (level.isLoaded(pos) && level.getBlockState(pos).is(block)) {
+                return true;
+            }
+        }
+        // If no level has it loaded, we can't confirm — assume still valid
+        // (will be validated next time the chunk loads)
+        boolean anyLoaded = false;
+        for (ServerLevel level : player.level().getServer().getAllLevels()) {
+            if (level.isLoaded(pos)) {
+                anyLoaded = true;
+                break;
+            }
+        }
+        return !anyLoaded;
     }
 
     /**

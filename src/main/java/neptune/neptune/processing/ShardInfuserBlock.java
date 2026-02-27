@@ -1,7 +1,6 @@
 package neptune.neptune.processing;
 
 import com.mojang.serialization.MapCodec;
-import neptune.neptune.broker.NeptuneMenus;
 import neptune.neptune.data.BlockPlacementsData;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.unlock.UnlockBranch;
@@ -13,6 +12,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -23,6 +23,7 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import org.jspecify.annotations.Nullable;
 
 public class ShardInfuserBlock extends BaseEntityBlock {
 
@@ -37,19 +38,20 @@ public class ShardInfuserBlock extends BaseEntityBlock {
         return CODEC;
     }
 
+    @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new ShardInfuserBlockEntity(pos, state);
     }
 
     @Override
-    public RenderShape getRenderShape(BlockState state) {
+    protected RenderShape getRenderShape(BlockState state) {
         return RenderShape.MODEL;
     }
 
     @Override
-    public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
-        if (level.isClientSide || !(placer instanceof ServerPlayer player)) return;
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        if (level.isClientSide() || !(placer instanceof ServerPlayer player)) return;
 
         UnlockData unlocks = player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
         if (!unlocks.hasTier(UnlockBranch.PROCESSING, 2)) {
@@ -77,7 +79,7 @@ public class ShardInfuserBlock extends BaseEntityBlock {
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
-        if (level.isClientSide) return InteractionResult.SUCCESS;
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
 
         if (player instanceof ServerPlayer serverPlayer) {
             serverPlayer.openMenu(new ExtendedScreenHandlerFactory<BlockPos>() {
@@ -103,20 +105,10 @@ public class ShardInfuserBlock extends BaseEntityBlock {
 
     @Override
     public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
-        if (!level.isClientSide) {
+        if (!level.isClientSide()) {
             returnGearAndClearOwner(level, pos);
         }
         return super.playerWillDestroy(level, pos, state, player);
-    }
-
-    @Override
-    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock())) {
-            if (!level.isClientSide) {
-                returnGearAndClearOwner(level, pos);
-            }
-        }
-        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     private void returnGearAndClearOwner(Level level, BlockPos pos) {
@@ -131,7 +123,7 @@ public class ShardInfuserBlock extends BaseEntityBlock {
                 giveBack(owner, infuserBE.getGearSlot().copy());
             } else {
                 // Owner offline — drop item at block pos
-                net.minecraft.world.entity.item.ItemEntity itemEntity = new net.minecraft.world.entity.item.ItemEntity(
+                ItemEntity itemEntity = new ItemEntity(
                         level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
                         infuserBE.getGearSlot().copy());
                 level.addFreshEntity(itemEntity);

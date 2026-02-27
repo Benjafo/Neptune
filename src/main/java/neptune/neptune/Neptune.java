@@ -5,6 +5,7 @@ import neptune.neptune.command.NeptuneCommands;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.entity.NeptuneEntities;
 import neptune.neptune.network.NeptuneNetworking;
+import neptune.neptune.processing.NeptuneBlocks;
 import neptune.neptune.relic.NeptuneItems;
 import neptune.neptune.relic.RelicLootHandler;
 import net.fabricmc.api.ModInitializer;
@@ -21,6 +22,7 @@ public class Neptune implements ModInitializer {
 
         NeptuneAttachments.register();
         NeptuneItems.register();
+        NeptuneBlocks.register();
         NeptuneEntities.register();
         NeptuneMenus.register();
         NeptuneNetworking.register();

@@ -6,8 +6,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.tags.EnchantmentTags;
 import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
 import java.util.ArrayList;
@@ -18,7 +18,7 @@ public class EnchantmentShardHelper {
     public record ApplicableEnchantment(Holder<Enchantment> enchantment, int targetLevel, int shardCost) {
         public String getDisplayName() {
             return enchantment.unwrapKey()
-                    .map(key -> formatEnchantmentName(key.location().getPath()))
+                    .map(key -> formatEnchantmentName(key.identifier().getPath()))
                     .orElse("Unknown");
         }
 
@@ -80,7 +80,7 @@ public class EnchantmentShardHelper {
             Enchantment enchantment = holder.value();
 
             // Skip curses
-            if (enchantment.isCurse()) return;
+            if (holder.is(EnchantmentTags.CURSE)) return;
 
             // Must be applicable to this item
             if (!enchantment.canEnchant(gear)) return;

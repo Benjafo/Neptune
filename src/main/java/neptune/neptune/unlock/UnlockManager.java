@@ -111,8 +111,10 @@ public class UnlockManager {
     private static void applyUnlockEffects(ServerPlayer player, UnlockType unlock) {
         switch (unlock) {
             case PROCESSING_T1 -> {
-                // Gear now sells at 100% value (handled by checking unlock state in GearValueCalculator)
-                player.sendSystemMessage(Component.literal("§eGear now sells at full value!"));
+                player.sendSystemMessage(Component.literal("§eGear now sells at full value! You can now place a Breakdown Table."));
+            }
+            case PROCESSING_T2 -> {
+                player.sendSystemMessage(Component.literal("§eYou can now extract enchantment shards! You can now place a Shard Infuser."));
             }
             case CATALOG_T1 -> {
                 // Relics sell for +50% (handled by checking unlock state)

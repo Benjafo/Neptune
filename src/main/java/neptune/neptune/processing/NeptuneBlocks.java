@@ -1,5 +1,6 @@
 package neptune.neptune.processing;
 
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -47,13 +48,13 @@ public class NeptuneBlocks {
     public static final BlockEntityType<BreakdownTableBlockEntity> BREAKDOWN_TABLE_BE = Registry.register(
             BuiltInRegistries.BLOCK_ENTITY_TYPE,
             Identifier.fromNamespaceAndPath("neptune", "breakdown_table_be"),
-            BlockEntityType.Builder.of(BreakdownTableBlockEntity::new, BREAKDOWN_TABLE).build()
+            FabricBlockEntityTypeBuilder.create(BreakdownTableBlockEntity::new, BREAKDOWN_TABLE).build()
     );
 
     public static final BlockEntityType<ShardInfuserBlockEntity> SHARD_INFUSER_BE = Registry.register(
             BuiltInRegistries.BLOCK_ENTITY_TYPE,
             Identifier.fromNamespaceAndPath("neptune", "shard_infuser_be"),
-            BlockEntityType.Builder.of(ShardInfuserBlockEntity::new, SHARD_INFUSER).build()
+            FabricBlockEntityTypeBuilder.create(ShardInfuserBlockEntity::new, SHARD_INFUSER).build()
     );
 
     public static void register() {

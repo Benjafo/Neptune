@@ -7,9 +7,12 @@ import neptune.neptune.hud.EndMapHud;
 import neptune.neptune.hud.VoidEssenceHud;
 import neptune.neptune.map.ClientMapState;
 import neptune.neptune.network.MapSyncPayload;
+import neptune.neptune.network.ShardInfuserSyncPayload;
 import neptune.neptune.screen.BrokerScreen;
+import neptune.neptune.screen.BreakdownTableScreen;
 import neptune.neptune.screen.EndMapScreen;
 import neptune.neptune.screen.RelicJournalScreen;
+import neptune.neptune.screen.ShardInfuserScreen;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.unlock.UnlockBranch;
 import neptune.neptune.unlock.UnlockData;
@@ -38,6 +41,8 @@ public class NeptuneClient implements ClientModInitializer {
 
         // Menu screens
         MenuScreens.register(NeptuneMenus.BROKER_MENU, BrokerScreen::new);
+        MenuScreens.register(NeptuneMenus.BREAKDOWN_TABLE_MENU, BreakdownTableScreen::new);
+        MenuScreens.register(NeptuneMenus.SHARD_INFUSER_MENU, ShardInfuserScreen::new);
 
         // HUD elements
         VoidEssenceHud.register();
@@ -103,6 +108,14 @@ public class NeptuneClient implements ClientModInitializer {
         // Receive map sync packets
         ClientPlayNetworking.registerGlobalReceiver(MapSyncPayload.TYPE, (payload, context) -> {
             ClientMapState.handleSync(payload);
+        });
+
+        // Receive shard infuser sync packets
+        ClientPlayNetworking.registerGlobalReceiver(ShardInfuserSyncPayload.TYPE, (payload, context) -> {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc.screen instanceof ShardInfuserScreen screen) {
+                screen.handleSync(payload);
+            }
         });
     }
 }

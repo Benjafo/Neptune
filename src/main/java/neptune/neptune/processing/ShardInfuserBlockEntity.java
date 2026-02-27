@@ -1,11 +1,11 @@
 package neptune.neptune.processing;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.UUID;
 
@@ -37,24 +37,20 @@ public class ShardInfuserBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
         if (ownerUUID != null) {
-            tag.putUUID("OwnerUUID", ownerUUID);
+            output.putString("OwnerUUID", ownerUUID.toString());
         }
         if (!gearSlot.isEmpty()) {
-            tag.put("GearSlot", gearSlot.save(registries));
+            output.store("GearSlot", ItemStack.CODEC, gearSlot);
         }
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
-        if (tag.hasUUID("OwnerUUID")) {
-            ownerUUID = tag.getUUID("OwnerUUID");
-        }
-        if (tag.contains("GearSlot")) {
-            gearSlot = ItemStack.parse(registries, tag.getCompound("GearSlot")).orElse(ItemStack.EMPTY);
-        }
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
+        input.getString("OwnerUUID").ifPresent(s -> ownerUUID = UUID.fromString(s));
+        input.read("GearSlot", ItemStack.CODEC).ifPresent(stack -> gearSlot = stack);
     }
 }
