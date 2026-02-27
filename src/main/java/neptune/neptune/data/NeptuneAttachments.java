@@ -47,6 +47,14 @@ public class NeptuneAttachments {
                     .syncWith(RelicJournalData.STREAM_CODEC, AttachmentSyncPredicate.targetOnly())
     );
 
+    public static final AttachmentType<BlockPlacementsData> BLOCK_PLACEMENTS = AttachmentRegistry.create(
+            Identifier.fromNamespaceAndPath("neptune", "block_placements"),
+            builder -> builder
+                    .initializer(() -> BlockPlacementsData.EMPTY)
+                    .persistent(BlockPlacementsData.CODEC)
+                    .copyOnDeath()
+    );
+
     public static final AttachmentType<MapCollectionData> MAPS = AttachmentRegistry.create(
             Identifier.fromNamespaceAndPath("neptune", "maps"),
             builder -> builder

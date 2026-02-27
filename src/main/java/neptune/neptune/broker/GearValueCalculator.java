@@ -10,9 +10,13 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 
+import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.relic.RelicDefinition;
 import neptune.neptune.relic.RelicItem;
 import neptune.neptune.relic.NeptuneItems;
+import neptune.neptune.unlock.UnlockBranch;
+import neptune.neptune.unlock.UnlockData;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -144,10 +148,23 @@ public class GearValueCalculator {
     );
 
     /**
-     * Calculate the sell value of an item stack.
+     * Calculate the sell value of an item stack using the global sell rate.
      * Returns 0 if the item cannot be sold.
      */
     public static float calculateValue(ItemStack stack) {
+        return calculateValueWithRate(stack, sellRateModifier);
+    }
+
+    /**
+     * Calculate the sell value with per-player rate (1.0 if T1, 0.7 otherwise).
+     */
+    public static float calculateValue(ItemStack stack, ServerPlayer player) {
+        UnlockData unlocks = player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+        float rate = unlocks.hasTier(UnlockBranch.PROCESSING, 1) ? 1.0f : 0.7f;
+        return calculateValueWithRate(stack, rate);
+    }
+
+    private static float calculateValueWithRate(ItemStack stack, float rate) {
         if (stack.isEmpty()) return 0;
 
         Item item = stack.getItem();
@@ -165,19 +182,19 @@ public class GearValueCalculator {
             float value = gearBase;
             value += calculateEnchantmentValue(stack);
             value *= getDurabilityModifier(stack);
-            return Math.max(0, value * sellRateModifier);
+            return Math.max(0, value * rate);
         }
 
         // Check if it's an enchanted book
         if (item == Items.ENCHANTED_BOOK) {
             float enchValue = calculateEnchantmentValue(stack);
-            return Math.max(0, enchValue * sellRateModifier);
+            return Math.max(0, enchValue * rate);
         }
 
         // Check other fixed-value items
         Float otherValue = OTHER_VALUES.get(item);
         if (otherValue != null) {
-            return otherValue * stack.getCount() * sellRateModifier;
+            return otherValue * stack.getCount() * rate;
         }
 
         return 0;
@@ -224,6 +241,25 @@ public class GearValueCalculator {
         if (durabilityPercent >= 0.50f) return 0.35f;
         if (durabilityPercent >= 0.25f) return 0.2f;
         return 0.1f;
+    }
+
+    /**
+     * Calculate raw enchantment value (no sell rate applied). Used for shard extraction.
+     */
+    public static float calculateRawEnchantmentValue(ItemStack stack) {
+        return calculateEnchantmentValue(stack);
+    }
+
+    /**
+     * Get the value-per-level for an enchantment by its ResourceKey.
+     * Returns -1 if the enchantment is unknown/not in any tier.
+     */
+    public static float getEnchantmentValuePerLevel(ResourceKey<Enchantment> key) {
+        if (COMMON_ENCHANTS.contains(key)) return 0.5f;
+        if (MID_ENCHANTS.contains(key)) return 1.0f;
+        if (VALUABLE_ENCHANTS.contains(key)) return 7.0f;
+        if (CURSE_ENCHANTS.contains(key)) return -3.0f;
+        return -1f;
     }
 
     /**
