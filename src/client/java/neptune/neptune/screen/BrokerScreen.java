@@ -1,11 +1,13 @@
 package neptune.neptune.screen;
 
+import neptune.neptune.ClientRotatingStockCache;
 import neptune.neptune.broker.BrokerMenu;
 import neptune.neptune.broker.BrokerStock;
 import neptune.neptune.broker.GearValueCalculator;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.data.VoidEssenceData;
 import neptune.neptune.network.BrokerPurchasePayload;
+import neptune.neptune.network.RotatingStockSyncPayload;
 import neptune.neptune.relic.RelicJournalData;
 import neptune.neptune.relic.RelicSet;
 import neptune.neptune.relic.RelicSetBonus;
@@ -116,10 +118,29 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
         return baseCost;
     }
 
-    private void renderBuyTab(GuiGraphics graphics, int mouseX, int mouseY) {
+    /**
+     * Get the total number of combined entries (permanent + separator + rotating).
+     */
+    private List<BuyEntry> getCombinedBuyEntries() {
+        List<BuyEntry> combined = new ArrayList<>();
         List<BrokerStock.StockEntry> stock = getVisibleStock();
-        boolean discount = hasExplorersBonus();
+        for (BrokerStock.StockEntry e : stock) {
+            combined.add(new BuyEntry(e.id(), e.name(), getDisplayCost(e.cost()), e.cost(), e.description(), false));
+        }
+        List<RotatingStockSyncPayload.RotatingEntry> rotating = ClientRotatingStockCache.getEntries();
+        if (!rotating.isEmpty()) {
+            combined.add(new BuyEntry(null, null, 0, 0, null, true)); // separator
+            for (RotatingStockSyncPayload.RotatingEntry e : rotating) {
+                combined.add(new BuyEntry(e.id(), e.name(), e.cost(), e.cost(), e.description(), false));
+            }
+        }
+        return combined;
+    }
 
+    private record BuyEntry(String id, String name, int displayCost, int baseCost, String description, boolean isSeparator) {}
+
+    private void renderBuyTab(GuiGraphics graphics, int mouseX, int mouseY) {
+        boolean discount = hasExplorersBonus();
         String header = discount ? "Available Items: §a(-15% Explorers)" : "Available Items:";
         graphics.drawString(this.font, header, this.leftPos + 8, this.topPos + 24, 0x888888, false);
 
@@ -129,14 +150,24 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
             currentEssence = mc.player.getAttachedOrCreate(NeptuneAttachments.VOID_ESSENCE).current();
         }
 
+        List<BuyEntry> combined = getCombinedBuyEntries();
+
         // Clamp scroll
-        int maxScroll = Math.max(0, stock.size() - MAX_VISIBLE_ENTRIES);
+        int maxScroll = Math.max(0, combined.size() - MAX_VISIBLE_ENTRIES);
         buyScrollOffset = Math.min(buyScrollOffset, maxScroll);
 
-        int visibleCount = Math.min(stock.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
+        int visibleCount = Math.min(combined.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
         for (int i = 0; i < visibleCount; i++) {
-            BrokerStock.StockEntry entry = stock.get(i + buyScrollOffset);
+            BuyEntry entry = combined.get(i + buyScrollOffset);
             int y = this.topPos + STOCK_START_Y + i * STOCK_ENTRY_HEIGHT;
+
+            if (entry.isSeparator()) {
+                // Draw separator line and "Rotating Stock" label
+                int sepY = y + STOCK_ENTRY_HEIGHT / 2;
+                graphics.fill(this.leftPos + 8, sepY, this.leftPos + this.imageWidth - 8, sepY + 1, 0xFF555555);
+                graphics.drawString(this.font, "§6Rotating Stock", this.leftPos + 8, y + 2, 0xFFAA00, false);
+                continue;
+            }
 
             // Highlight on hover
             boolean hovered = mouseX >= this.leftPos + 4 && mouseX <= this.leftPos + this.imageWidth - 4
@@ -145,24 +176,17 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
                 graphics.fill(this.leftPos + 4, y, this.leftPos + this.imageWidth - 4, y + STOCK_ENTRY_HEIGHT, 0x40FFFFFF);
             }
 
-            int displayCost = getDisplayCost(entry.cost());
-            boolean canAfford = currentEssence >= displayCost;
+            boolean canAfford = currentEssence >= entry.displayCost();
             int nameColor = canAfford ? 0xFFFFFF : 0x666666;
             int costColor = canAfford ? 0x55FF55 : 0xFF5555;
 
             // Name
             graphics.drawString(this.font, entry.name(), this.leftPos + 8, y + 6, nameColor, false);
 
-            // Cost (show strikethrough original if discounted)
-            if (discount && entry.cost() != displayCost) {
-                String discountText = displayCost + " essence";
-                int discountWidth = this.font.width(discountText);
-                graphics.drawString(this.font, discountText, this.leftPos + this.imageWidth - discountWidth - 8, y + 6, costColor, false);
-            } else {
-                String costText = displayCost + " essence";
-                int costWidth = this.font.width(costText);
-                graphics.drawString(this.font, costText, this.leftPos + this.imageWidth - costWidth - 8, y + 6, costColor, false);
-            }
+            // Cost
+            String costText = entry.displayCost() + " essence";
+            int costWidth = this.font.width(costText);
+            graphics.drawString(this.font, costText, this.leftPos + this.imageWidth - costWidth - 8, y + 6, costColor, false);
         }
 
         // Scroll indicators
@@ -180,13 +204,14 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
         if (currentTab == Tab.BUY && event.button() == 0) {
             double mouseX = event.x();
             double mouseY = event.y();
-            List<BrokerStock.StockEntry> stock = getVisibleStock();
-            int visibleCount = Math.min(stock.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
+            List<BuyEntry> combined = getCombinedBuyEntries();
+            int visibleCount = Math.min(combined.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
             for (int i = 0; i < visibleCount; i++) {
+                BuyEntry entry = combined.get(i + buyScrollOffset);
+                if (entry.isSeparator()) continue;
                 int y = this.topPos + STOCK_START_Y + i * STOCK_ENTRY_HEIGHT;
                 if (mouseX >= this.leftPos + 4 && mouseX <= this.leftPos + this.imageWidth - 4
                         && mouseY >= y && mouseY < y + STOCK_ENTRY_HEIGHT) {
-                    BrokerStock.StockEntry entry = stock.get(i + buyScrollOffset);
                     ClientPlayNetworking.send(new BrokerPurchasePayload(entry.id()));
                     return true;
                 }
@@ -198,8 +223,8 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (currentTab == Tab.BUY) {
-            List<BrokerStock.StockEntry> stock = getVisibleStock();
-            int maxScroll = Math.max(0, stock.size() - MAX_VISIBLE_ENTRIES);
+            List<BuyEntry> combined = getCombinedBuyEntries();
+            int maxScroll = Math.max(0, combined.size() - MAX_VISIBLE_ENTRIES);
             if (scrollY > 0) {
                 buyScrollOffset = Math.max(0, buyScrollOffset - 1);
             } else if (scrollY < 0) {
@@ -234,21 +259,21 @@ public class BrokerScreen extends AbstractContainerScreen<BrokerMenu> {
 
         // Buy tab tooltips
         if (currentTab == Tab.BUY) {
-            List<BrokerStock.StockEntry> stock = getVisibleStock();
-            int visibleCount = Math.min(stock.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
+            List<BuyEntry> combined = getCombinedBuyEntries();
+            int visibleCount = Math.min(combined.size() - buyScrollOffset, MAX_VISIBLE_ENTRIES);
             for (int i = 0; i < visibleCount; i++) {
+                BuyEntry entry = combined.get(i + buyScrollOffset);
+                if (entry.isSeparator()) continue;
                 int y = this.topPos + STOCK_START_Y + i * STOCK_ENTRY_HEIGHT;
                 if (mouseX >= this.leftPos + 4 && mouseX <= this.leftPos + this.imageWidth - 4
                         && mouseY >= y && mouseY < y + STOCK_ENTRY_HEIGHT) {
-                    BrokerStock.StockEntry entry = stock.get(i + buyScrollOffset);
-                    int displayCost = getDisplayCost(entry.cost());
                     List<Component> tooltip = new ArrayList<>();
                     tooltip.add(Component.literal("§e" + entry.name()));
                     tooltip.add(Component.literal("§7" + entry.description()));
-                    if (hasExplorersBonus() && displayCost != entry.cost()) {
-                        tooltip.add(Component.literal("§6Cost: §m" + entry.cost() + "§r §a" + displayCost + " essence"));
+                    if (hasExplorersBonus() && entry.displayCost() != entry.baseCost()) {
+                        tooltip.add(Component.literal("§6Cost: §m" + entry.baseCost() + "§r §a" + entry.displayCost() + " essence"));
                     } else {
-                        tooltip.add(Component.literal("§6Cost: " + displayCost + " essence"));
+                        tooltip.add(Component.literal("§6Cost: " + entry.displayCost() + " essence"));
                     }
                     graphics.setComponentTooltipForNextFrame(this.font, tooltip, mouseX, mouseY);
                     break;

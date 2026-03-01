@@ -17,9 +17,10 @@ public record RelicJournalData(
         Set<String> discoveredIds,
         Map<String, Integer> duplicateCounts,
         int citiesWithoutLegendary,
-        String forcedRelicTier
+        String forcedRelicTier,
+        boolean doubleDropActive
 ) {
-    public static final RelicJournalData EMPTY = new RelicJournalData(Set.of(), Map.of(), 0, "");
+    public static final RelicJournalData EMPTY = new RelicJournalData(Set.of(), Map.of(), 0, "", false);
 
     public static final Codec<RelicJournalData> CODEC = RecordCodecBuilder.create(instance ->
             instance.group(
@@ -33,7 +34,9 @@ public record RelicJournalData(
                     Codec.INT.fieldOf("citiesWithoutLegendary")
                             .forGetter(RelicJournalData::citiesWithoutLegendary),
                     Codec.STRING.optionalFieldOf("forcedRelicTier", "")
-                            .forGetter(RelicJournalData::forcedRelicTier)
+                            .forGetter(RelicJournalData::forcedRelicTier),
+                    Codec.BOOL.optionalFieldOf("doubleDropActive", false)
+                            .forGetter(RelicJournalData::doubleDropActive)
             ).apply(instance, RelicJournalData::new)
     );
 
@@ -44,7 +47,9 @@ public record RelicJournalData(
             RelicJournalData::citiesWithoutLegendary,
             ByteBufCodecs.STRING_UTF8,
             RelicJournalData::forcedRelicTier,
-            (list, cities, forced) -> new RelicJournalData(new HashSet<>(list), Map.of(), cities, forced)
+            ByteBufCodecs.BOOL,
+            RelicJournalData::doubleDropActive,
+            (list, cities, forced, doubleDrop) -> new RelicJournalData(new HashSet<>(list), Map.of(), cities, forced, doubleDrop)
     );
 
     public boolean hasForcedTier() {
@@ -57,11 +62,19 @@ public record RelicJournalData(
     }
 
     public RelicJournalData withForcedTier(RelicRarity rarity) {
-        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, rarity.name());
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, rarity.name(), doubleDropActive);
     }
 
     public RelicJournalData withForcedTierConsumed() {
-        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, "");
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, "", doubleDropActive);
+    }
+
+    public RelicJournalData withDoubleDropActive() {
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, forcedRelicTier, true);
+    }
+
+    public RelicJournalData withDoubleDropConsumed() {
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary, forcedRelicTier, false);
     }
 
     public boolean hasDiscovered(String relicId) {
@@ -80,18 +93,18 @@ public record RelicJournalData(
         if (discoveredIds.contains(relicId)) {
             Map<String, Integer> newDupes = new HashMap<>(duplicateCounts);
             newDupes.merge(relicId, 1, Integer::sum);
-            return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary, forcedRelicTier);
+            return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary, forcedRelicTier, doubleDropActive);
         }
         Set<String> newIds = new HashSet<>(discoveredIds);
         newIds.add(relicId);
-        return new RelicJournalData(Set.copyOf(newIds), duplicateCounts, citiesWithoutLegendary, forcedRelicTier);
+        return new RelicJournalData(Set.copyOf(newIds), duplicateCounts, citiesWithoutLegendary, forcedRelicTier, doubleDropActive);
     }
 
     public RelicJournalData withCityVisited(boolean hadLegendary) {
         if (hadLegendary) {
-            return new RelicJournalData(discoveredIds, duplicateCounts, 0, forcedRelicTier);
+            return new RelicJournalData(discoveredIds, duplicateCounts, 0, forcedRelicTier, doubleDropActive);
         }
-        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary + 1, forcedRelicTier);
+        return new RelicJournalData(discoveredIds, duplicateCounts, citiesWithoutLegendary + 1, forcedRelicTier, doubleDropActive);
     }
 
     public int getCompletedMinorSets() {
@@ -139,7 +152,7 @@ public record RelicJournalData(
         } else {
             newDupes.put(relicId, remaining);
         }
-        return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary, forcedRelicTier);
+        return new RelicJournalData(discoveredIds, Map.copyOf(newDupes), citiesWithoutLegendary, forcedRelicTier, doubleDropActive);
     }
 
     public List<String> getInfusableRelicIds() {

@@ -79,6 +79,14 @@ public class NeptuneAttachments {
                     .copyOnDeath()
     );
 
+    public static final AttachmentType<RotatingStockData> ROTATING_STOCK = AttachmentRegistry.create(
+            Identifier.fromNamespaceAndPath("neptune", "rotating_stock"),
+            builder -> builder
+                    .initializer(() -> RotatingStockData.EMPTY)
+                    .persistent(RotatingStockData.CODEC)
+                    .copyOnDeath()
+    );
+
     public static void register() {
         // Force static initialization
     }

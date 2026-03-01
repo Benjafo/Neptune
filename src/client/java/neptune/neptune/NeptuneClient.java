@@ -131,5 +131,10 @@ public class NeptuneClient implements ClientModInitializer {
                 screen.handleSync(payload);
             }
         });
+
+        // Receive rotating stock sync packets
+        ClientPlayNetworking.registerGlobalReceiver(RotatingStockSyncPayload.TYPE, (payload, context) -> {
+            ClientRotatingStockCache.update(payload.entries());
+        });
     }
 }

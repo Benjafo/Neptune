@@ -1,6 +1,7 @@
 package neptune.neptune;
 
 import neptune.neptune.broker.NeptuneMenus;
+import neptune.neptune.broker.TomeBuffManager;
 import neptune.neptune.command.NeptuneCommands;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.entity.NeptuneEntities;
@@ -30,6 +31,7 @@ public class Neptune implements ModInitializer {
         NeptuneCommands.register();
         RelicLootHandler.register();
         RegionCompletionTracker.register();
+        TomeBuffManager.register();
 
         LOGGER.info("Neptune mod initialized.");
     }

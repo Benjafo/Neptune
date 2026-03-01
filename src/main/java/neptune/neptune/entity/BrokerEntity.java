@@ -1,6 +1,12 @@
 package neptune.neptune.entity;
 
 import neptune.neptune.broker.BrokerMenu;
+import neptune.neptune.broker.RotatingStock;
+import neptune.neptune.data.NeptuneAttachments;
+import neptune.neptune.data.RotatingStockData;
+import neptune.neptune.network.NeptuneNetworking;
+import neptune.neptune.relic.RelicJournalData;
+import neptune.neptune.unlock.UnlockData;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,6 +20,8 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 public class BrokerEntity extends Mob {
 
@@ -79,13 +87,32 @@ public class BrokerEntity extends Mob {
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!this.level().isClientSide() && player instanceof ServerPlayer serverPlayer) {
+            // Refresh rotating stock if needed
+            refreshRotatingStock(serverPlayer);
+
             serverPlayer.openMenu(new SimpleMenuProvider(
                     (containerId, playerInventory, playerAccess) ->
                             new BrokerMenu(containerId, playerInventory),
                     BROKER_TITLE
             ));
+
+            // Sync rotating stock to client
+            NeptuneNetworking.syncRotatingStockToClient(serverPlayer);
+
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.CONSUME;
+    }
+
+    private void refreshRotatingStock(ServerPlayer player) {
+        RotatingStockData stockData = player.getAttachedOrCreate(NeptuneAttachments.ROTATING_STOCK);
+        long gameTime = player.level().getGameTime();
+
+        if (RotatingStock.shouldRefresh(stockData, gameTime)) {
+            UnlockData unlocks = player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+            RelicJournalData journal = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+            List<String> newItems = RotatingStock.selectRotation(unlocks, stockData, journal);
+            player.setAttached(NeptuneAttachments.ROTATING_STOCK, stockData.withItems(newItems, gameTime));
+        }
     }
 }

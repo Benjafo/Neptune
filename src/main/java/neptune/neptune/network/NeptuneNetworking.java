@@ -1,7 +1,9 @@
 package neptune.neptune.network;
 
 import neptune.neptune.broker.BrokerStock;
+import neptune.neptune.broker.RotatingStock;
 import neptune.neptune.broker.StructureFinder;
+import neptune.neptune.broker.TomeBuffManager;
 import neptune.neptune.data.*;
 import neptune.neptune.map.EndMapData;
 import neptune.neptune.map.MapCollectionData;
@@ -18,6 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.alchemy.Potions;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 
@@ -25,6 +28,8 @@ import neptune.neptune.Neptune;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.stream.Collectors;
 
 public class NeptuneNetworking {
 
@@ -43,6 +48,7 @@ public class NeptuneNetworking {
         PayloadTypeRegistry.playS2C().register(ShardInfuserSyncPayload.TYPE, ShardInfuserSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(RelicInfuserSyncPayload.TYPE, RelicInfuserSyncPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(WaypointSyncPayload.TYPE, WaypointSyncPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(RotatingStockSyncPayload.TYPE, RotatingStockSyncPayload.STREAM_CODEC);
 
         // Sync map data, validate block placements, apply infusion on join
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
@@ -114,6 +120,13 @@ public class NeptuneNetworking {
         ServerPlayNetworking.registerGlobalReceiver(BrokerPurchasePayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
             String itemId = payload.itemId();
+
+            // Check if this is a rotating stock item
+            RotatingStock.RotatingEntry rotEntry = RotatingStock.getById(itemId);
+            if (rotEntry != null) {
+                handleRotatingPurchase(player, rotEntry);
+                return;
+            }
 
             BrokerStock.StockEntry entry = BrokerStock.getById(itemId);
             if (entry == null) return;
@@ -335,6 +348,164 @@ public class NeptuneNetworking {
         if (changed) {
             player.setAttached(NeptuneAttachments.WAYPOINTS, new WaypointData(List.copyOf(valid)));
         }
+    }
+
+    /**
+     * Handle purchase of a rotating stock item.
+     */
+    private static void handleRotatingPurchase(ServerPlayer player, RotatingStock.RotatingEntry entry) {
+        String itemId = entry.id();
+
+        // Validate item is in the player's current rotation
+        RotatingStockData stockData = player.getAttachedOrCreate(NeptuneAttachments.ROTATING_STOCK);
+        if (!stockData.hasCurrentItem(itemId)) {
+            player.sendSystemMessage(Component.literal("§cThis item is not in your current rotation!"));
+            return;
+        }
+
+        // Check unlock requirement
+        if (entry.requiredUnlock() != null) {
+            UnlockData unlocks = player.getAttachedOrCreate(NeptuneAttachments.UNLOCKS);
+            if (!unlocks.hasUnlock(entry.requiredUnlock())) {
+                player.sendSystemMessage(Component.literal("§cYou haven't unlocked this item yet!"));
+                return;
+            }
+        }
+
+        // Calculate cost with Explorers discount
+        int cost = entry.cost();
+        if (RelicSetBonus.hasExplorersBonus(player)) {
+            cost = RelicSetBonus.applyExplorersDiscount(cost);
+        }
+
+        VoidEssenceData data = player.getAttachedOrCreate(NeptuneAttachments.VOID_ESSENCE);
+        VoidEssenceData afterSpend = data.spend(cost);
+        if (afterSpend == null) {
+            player.sendSystemMessage(Component.literal("§cNot enough void essence! Need " + cost));
+            return;
+        }
+
+        switch (itemId) {
+            case "rot_eff_tome" -> {
+                if (!TomeBuffManager.applyEfficiencyTome(player)) return;
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+            }
+            case "rot_prot_tome" -> {
+                if (!TomeBuffManager.applyProtectionTome(player)) return;
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+            }
+            case "rot_double_drop" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                RelicJournalData journal = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+                player.setAttached(NeptuneAttachments.RELIC_JOURNAL, journal.withDoubleDropActive());
+                player.sendSystemMessage(Component.literal("§dDouble Drop Charm activated! Your next relic find will be doubled."));
+            }
+            case "rot_mystery_box" -> {
+                RelicJournalData journal = player.getAttachedOrCreate(NeptuneAttachments.RELIC_JOURNAL);
+                // Find unowned relics across common, uncommon, rare
+                List<RelicDefinition> candidates = new ArrayList<>();
+                for (RelicRarity rarity : new RelicRarity[]{RelicRarity.COMMON, RelicRarity.UNCOMMON, RelicRarity.RARE}) {
+                    for (RelicDefinition def : RelicDefinition.getByRarity(rarity)) {
+                        if (!journal.hasDiscovered(def.id())) {
+                            candidates.add(def);
+                        }
+                    }
+                }
+                if (candidates.isEmpty()) {
+                    player.sendSystemMessage(Component.literal("§cYou already own all common, uncommon, and rare relics!"));
+                    return;
+                }
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                RelicDefinition chosen = candidates.get(new Random().nextInt(candidates.size()));
+                ItemStack relicStack = RelicItem.createStack(NeptuneItems.RELIC, chosen);
+                giveItem(player, relicStack);
+                player.sendSystemMessage(Component.literal(
+                        chosen.rarity().getColorCode() + "✦ Mystery Box revealed: " + chosen.displayName() + "!"));
+            }
+            case "rot_slow_fall" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                for (int i = 0; i < 3; i++) {
+                    ItemStack potion = new ItemStack(Items.POTION);
+                    potion.set(DataComponents.POTION_CONTENTS,
+                            new net.minecraft.world.item.alchemy.PotionContents(Potions.LONG_SLOW_FALLING));
+                    giveItem(player, potion);
+                }
+                player.sendSystemMessage(Component.literal("§aPurchased 3 Slow Falling Potions!"));
+            }
+            case "rot_totem" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.TOTEM_OF_UNDYING));
+                player.sendSystemMessage(Component.literal("§aPurchased Totem of Undying!"));
+            }
+            case "rot_gap" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.ENCHANTED_GOLDEN_APPLE));
+                player.sendSystemMessage(Component.literal("§aPurchased Enchanted Golden Apple!"));
+            }
+            case "rot_carrots" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.GOLDEN_CARROT, 32));
+                player.sendSystemMessage(Component.literal("§aPurchased 32 Golden Carrots!"));
+            }
+            case "rot_ender_chest" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.ENDER_CHEST));
+                player.sendSystemMessage(Component.literal("§aPurchased Ender Chest!"));
+            }
+            case "rot_night_vision" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                for (int i = 0; i < 3; i++) {
+                    ItemStack potion = new ItemStack(Items.POTION);
+                    potion.set(DataComponents.POTION_CONTENTS,
+                            new net.minecraft.world.item.alchemy.PotionContents(Potions.LONG_NIGHT_VISION));
+                    giveItem(player, potion);
+                }
+                player.sendSystemMessage(Component.literal("§aPurchased 3 Night Vision Potions!"));
+            }
+            case "rot_scaffolding" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.SCAFFOLDING, 64));
+                player.sendSystemMessage(Component.literal("§aPurchased 64 Scaffolding!"));
+            }
+            case "rot_spyglass" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.SPYGLASS));
+                player.sendSystemMessage(Component.literal("§aPurchased Spyglass!"));
+            }
+            case "rot_shield" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.SHIELD));
+                player.sendSystemMessage(Component.literal("§aPurchased Shield!"));
+            }
+            case "rot_bow_arrows" -> {
+                player.setAttached(NeptuneAttachments.VOID_ESSENCE, afterSpend);
+                giveItem(player, new ItemStack(Items.BOW));
+                giveItem(player, new ItemStack(Items.ARROW, 64));
+                player.sendSystemMessage(Component.literal("§aPurchased Bow + 64 Arrows!"));
+            }
+        }
+
+        // Record purchase in history
+        player.setAttached(NeptuneAttachments.ROTATING_STOCK, stockData.withPurchase(itemId));
+    }
+
+    /**
+     * Sync rotating stock to client for the broker screen.
+     */
+    public static void syncRotatingStockToClient(ServerPlayer player) {
+        RotatingStockData stockData = player.getAttachedOrCreate(NeptuneAttachments.ROTATING_STOCK);
+        List<RotatingStock.RotatingEntry> entries = RotatingStock.getCurrentStock(stockData);
+
+        boolean discount = RelicSetBonus.hasExplorersBonus(player);
+
+        List<RotatingStockSyncPayload.RotatingEntry> syncEntries = new ArrayList<>();
+        for (RotatingStock.RotatingEntry entry : entries) {
+            int cost = discount ? RelicSetBonus.applyExplorersDiscount(entry.cost()) : entry.cost();
+            syncEntries.add(new RotatingStockSyncPayload.RotatingEntry(
+                    entry.id(), entry.name(), cost, entry.description()));
+        }
+
+        ServerPlayNetworking.send(player, new RotatingStockSyncPayload(syncEntries));
     }
 
     private static void giveItem(ServerPlayer player, ItemStack stack) {

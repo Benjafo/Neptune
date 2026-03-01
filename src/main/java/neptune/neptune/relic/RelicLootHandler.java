@@ -99,6 +99,15 @@ public class RelicLootHandler {
             ItemStack relicStack = RelicItem.createStack(NeptuneItems.RELIC, def);
             drops.add(relicStack);
 
+            // Double drop charm: add a second copy and consume the flag
+            if (player != null && journal != null && journal.doubleDropActive()) {
+                ItemStack doubleStack = RelicItem.createStack(NeptuneItems.RELIC, def);
+                drops.add(doubleStack);
+                journal = journal.withDoubleDropConsumed();
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§d✦ Double Drop Charm activated! You found an extra relic!"));
+            }
+
             // Update journal counter and consume forced tier if active
             if (player != null && journal != null) {
                 boolean isLegendary = rarity == RelicRarity.LEGENDARY;

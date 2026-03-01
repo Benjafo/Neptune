@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import neptune.neptune.challenge.ChallengeTracker;
 import neptune.neptune.data.NeptuneAttachments;
+import neptune.neptune.data.RotatingStockData;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -228,6 +229,10 @@ public class EndMapCommands {
 
         // Track challenge
         ChallengeTracker.onCityMarked(player, updated.getMarkedCount());
+
+        // Increment rotating stock city counter
+        RotatingStockData stockData = player.getAttachedOrCreate(NeptuneAttachments.ROTATING_STOCK);
+        player.setAttached(NeptuneAttachments.ROTATING_STOCK, stockData.withCityMarked());
 
         return 1;
     }
