@@ -129,6 +129,9 @@ public class UnlockManager {
             case NAVIGATION_T4 -> {
                 player.sendSystemMessage(Component.literal("§eEnd Cartographer unlocked! Place Waypoint Beacons to teleport across the End."));
             }
+            case CATALOG_T3 -> {
+                player.sendSystemMessage(Component.literal("§eCurator unlocked! Explore full 5x5 grid regions for 200 essence each."));
+            }
             default -> {
                 // Other unlocks enable features passively (checked when features are used)
             }

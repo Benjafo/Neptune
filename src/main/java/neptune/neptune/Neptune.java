@@ -4,6 +4,7 @@ import neptune.neptune.broker.NeptuneMenus;
 import neptune.neptune.command.NeptuneCommands;
 import neptune.neptune.data.NeptuneAttachments;
 import neptune.neptune.entity.NeptuneEntities;
+import neptune.neptune.map.RegionCompletionTracker;
 import neptune.neptune.network.NeptuneNetworking;
 import neptune.neptune.processing.NeptuneBlocks;
 import neptune.neptune.relic.NeptuneItems;
@@ -28,6 +29,7 @@ public class Neptune implements ModInitializer {
         NeptuneNetworking.register();
         NeptuneCommands.register();
         RelicLootHandler.register();
+        RegionCompletionTracker.register();
 
         LOGGER.info("Neptune mod initialized.");
     }
